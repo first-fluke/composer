@@ -1,0 +1,38 @@
+# 환경변수
+.env
+.env.local
+.env.*.local
+
+# 의존성
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 빌드 결과물
+dist/
+build/
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 로그
+*.log
+logs/
+
+# 임시 파일
+*.tmp
+.cache/
+
+# 툴 내부 파일
+.serena/
+.superset/
