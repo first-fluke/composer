@@ -5,9 +5,27 @@
 
 ---
 
-## 1. Build & Test
+## 1. Install & Build
 
-**원커맨드 빌드/테스트:**
+**하네스 설치 (신규 또는 기존 프로젝트 모두):**
+
+```bash
+# 신규 프로젝트 (클론 후 실행)
+./scripts/install.sh
+
+# 기존 프로젝트 (프로젝트 루트에서 바로 실행)
+curl -fsSL https://raw.githubusercontent.com/first-fluke/composer/main/scripts/install.sh | bash
+```
+
+설치 스크립트가 프로젝트 상태를 자동 감지해 신규/기존 모드로 분기한다.
+
+**설치 후 검증:**
+
+```bash
+./scripts/harness/validate.sh
+```
+
+**신규 프로젝트 전체 빌드/테스트:**
 
 ```bash
 ./scripts/dev.sh

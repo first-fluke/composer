@@ -118,39 +118,62 @@ agent-template/
 
 ---
 
-## Quick Start
+## Installation
 
-### Prerequisites
+Composer works for both **new projects** (full scaffold) and **existing projects** (harness overlay only). The installer auto-detects which mode to use.
 
-- Git
-- The agent CLI you want to use (e.g., `codex`, `claude`, etc.)
-- A [Linear](https://linear.app) workspace
-
-### 1. Clone and configure
+### New project
 
 ```bash
-git clone <this-repo> my-symphony
-cd my-symphony
+git clone https://github.com/first-fluke/composer.git my-project
+cd my-project
+./scripts/install.sh
+```
 
+The installer copies the full scaffold: harness core, `src/`, `scripts/dev.sh`, and optionally `.github/` CI workflows.
+
+### Existing project
+
+Run the installer from your project root — no cloning required:
+
+```bash
+cd your-existing-project
+curl -fsSL https://raw.githubusercontent.com/first-fluke/composer/main/scripts/install.sh | bash
+```
+
+**What gets installed on an existing project:**
+
+| Item | Action |
+|---|---|
+| `.agents/`, `.claude/`, `docs/` | Copied in (harness core) |
+| `scripts/harness/gc.sh`, `validate.sh` | Copied in |
+| `WORKFLOW.md`, `.env.example` | Copied in |
+| `AGENTS.md` | Appended if exists, created if not |
+| `CLAUDE.md` | `@AGENTS.md` import added if missing |
+| `.gitignore` | Missing entries appended (never overwritten) |
+| `src/`, `scripts/dev.sh` | **Skipped** |
+| `.github/` | **Optional** — asked interactively |
+
+### After installation
+
+**1. Configure `.env`**
+
+```bash
 cp .env.example .env
 # Edit .env with your actual values
 ```
 
-### 2. Fill in `.env`
+Required values:
 
 ```bash
-# Linear issue tracker
 LINEAR_API_KEY=lin_api_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 LINEAR_TEAM_ID=ACR
 LINEAR_TEAM_UUID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 LINEAR_WORKFLOW_STATE_IN_PROGRESS=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 LINEAR_WORKFLOW_STATE_DONE=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 LINEAR_WORKFLOW_STATE_CANCELLED=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-
-# Symphony orchestrator
 WORKSPACE_ROOT=/absolute/path/to/workspaces
 LOG_LEVEL=info
-LOG_FORMAT=json
 ```
 
 **How to find Linear UUIDs:**
@@ -161,23 +184,19 @@ curl -s -X POST https://api.linear.app/graphql \
   -H "Authorization: YOUR_LINEAR_API_KEY" \
   -d '{"query":"{ teams { nodes { id key name } } }"}' | jq .
 
-# For workflow state UUIDs:
 curl -s -X POST https://api.linear.app/graphql \
   -H "Content-Type: application/json" \
   -H "Authorization: YOUR_LINEAR_API_KEY" \
   -d '{"query":"{ workflowStates { nodes { id name type } } }"}' | jq .
 ```
 
-### 3. Bootstrap
+**2. Validate**
 
 ```bash
-chmod +x scripts/dev.sh scripts/harness/gc.sh scripts/harness/validate.sh
-./scripts/dev.sh
+./scripts/harness/validate.sh
 ```
 
-This script validates your environment, checks prerequisites, and confirms the harness is ready.
-
-### 4. Choose a stack and scaffold
+**3. Scaffold a Symphony implementation**
 
 Ask your AI agent:
 
@@ -185,7 +204,7 @@ Ask your AI agent:
 Read AGENT_SETUP.md and scaffold a Symphony implementation using [TypeScript/Python/Go].
 ```
 
-Or use the built-in skill directly (Claude Code):
+Or use the built-in Claude Code skill:
 
 ```
 /symphony-scaffold

@@ -118,51 +118,74 @@ agent-template/
 
 ---
 
-## 빠른 시작
+## 설치
 
-### 사전 요구사항
+Composer는 **신규 프로젝트** (전체 스캐폴드)와 **기존 프로젝트** (하네스만 추가) 모두 지원합니다. 설치 스크립트가 자동으로 모드를 감지합니다.
 
-- Git
-- 사용하고자 하는 에이전트 CLI (예: `codex`, `claude` 등)
-- [Linear](https://linear.app) 워크스페이스
-
-### 1. 클론 및 설정
+### 신규 프로젝트
 
 ```bash
-git clone <이-레포> my-symphony
-cd my-symphony
-
-cp .env.example .env
-# .env 파일을 편집하여 실제 값을 입력하세요
+git clone https://github.com/first-fluke/composer.git my-project
+cd my-project
+./scripts/install.sh
 ```
 
-### 2. `.env` 설정
+하네스 코어, `src/`, `scripts/dev.sh`, 선택적으로 `.github/` CI 워크플로우까지 전체 스캐폴드를 설치합니다.
+
+### 기존 프로젝트
+
+프로젝트 루트에서 설치 스크립트를 바로 실행합니다 — 클론 불필요:
 
 ```bash
-# Linear 이슈 트래커
+cd your-existing-project
+curl -fsSL https://raw.githubusercontent.com/first-fluke/composer/main/scripts/install.sh | bash
+```
+
+**기존 프로젝트에 설치되는 항목:**
+
+| 항목 | 처리 방식 |
+|---|---|
+| `.agents/`, `.claude/`, `docs/` | 복사 (하네스 코어) |
+| `scripts/harness/gc.sh`, `validate.sh` | 복사 |
+| `WORKFLOW.md`, `.env.example` | 복사 |
+| `AGENTS.md` | 기존 파일 있으면 Symphony 섹션 추가, 없으면 생성 |
+| `CLAUDE.md` | `@AGENTS.md` import 라인 없으면 추가 |
+| `.gitignore` | 누락 항목만 추가 (덮어쓰기 없음) |
+| `src/`, `scripts/dev.sh` | **스킵** |
+| `.github/` | **선택적** — 설치 중 묻고 결정 |
+
+### 설치 후 설정
+
+**1. `.env` 설정**
+
+```bash
+cp .env.example .env
+# .env 파일에 실제 값을 입력하세요
+```
+
+필수 값:
+
+```bash
 LINEAR_API_KEY=lin_api_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 LINEAR_TEAM_ID=ACR
 LINEAR_TEAM_UUID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 LINEAR_WORKFLOW_STATE_IN_PROGRESS=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 LINEAR_WORKFLOW_STATE_DONE=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 LINEAR_WORKFLOW_STATE_CANCELLED=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-
-# Symphony 오케스트레이터
 WORKSPACE_ROOT=/절대경로/workspaces
 LOG_LEVEL=info
-LOG_FORMAT=json
 ```
 
 **Linear UUID 찾는 방법:**
 
 ```bash
-# 팀 UUID 조회
+# 팀 UUID
 curl -s -X POST https://api.linear.app/graphql \
   -H "Content-Type: application/json" \
   -H "Authorization: YOUR_LINEAR_API_KEY" \
   -d '{"query":"{ teams { nodes { id key name } } }"}' | jq .
 
-# 워크플로우 상태 UUID 조회
+# 워크플로우 상태 UUID
 curl -s -X POST https://api.linear.app/graphql \
   -H "Content-Type: application/json" \
   -H "Authorization: YOUR_LINEAR_API_KEY" \
@@ -171,16 +194,13 @@ curl -s -X POST https://api.linear.app/graphql \
 
 > Linear Personal API Key 발급: Linear → Settings → API → Personal API keys
 
-### 3. 환경 부트스트랩
+**2. 검증**
 
 ```bash
-chmod +x scripts/dev.sh scripts/harness/gc.sh scripts/harness/validate.sh
-./scripts/dev.sh
+./scripts/harness/validate.sh
 ```
 
-이 스크립트는 환경 변수를 검증하고, 사전 요구사항을 확인하며, 하네스 준비 상태를 확인합니다.
-
-### 4. 스택 선택 및 스캐폴딩
+**3. Symphony 구현 스캐폴딩**
 
 AI 에이전트에게 다음과 같이 요청하세요:
 
@@ -188,7 +208,7 @@ AI 에이전트에게 다음과 같이 요청하세요:
 AGENT_SETUP.md를 읽고 [TypeScript/Python/Go]로 Symphony 구현을 스캐폴딩해줘.
 ```
 
-또는 내장 스킬을 직접 사용 (Claude Code):
+또는 Claude Code 내장 스킬을 직접 사용:
 
 ```
 /symphony-scaffold

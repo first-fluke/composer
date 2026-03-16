@@ -86,6 +86,36 @@ docs/harness/         ← Security, observability, entropy management, feedback 
 
 ## 3. Environment Setup
 
+### Step 0: Install the harness
+
+Composer supports two installation modes. The installer auto-detects which one applies.
+
+**New project** (you just cloned this repo):
+```bash
+./scripts/install.sh
+```
+
+**Existing project** (adding the harness to a project you already have):
+```bash
+cd your-existing-project
+curl -fsSL https://raw.githubusercontent.com/first-fluke/composer/main/scripts/install.sh | bash
+```
+
+**What the installer does per mode:**
+
+| Item | New project | Existing project |
+|---|---|---|
+| `.agents/`, `.claude/`, `docs/` | Copied | Copied |
+| `scripts/harness/gc.sh`, `validate.sh` | Copied | Copied |
+| `WORKFLOW.md`, `.env.example` | Copied | Copied |
+| `AGENTS.md` | Copied | Appended (Symphony section added) |
+| `CLAUDE.md` | Copied | `@AGENTS.md` line injected if missing |
+| `.gitignore` | Copied | Missing entries appended |
+| `src/`, `scripts/dev.sh` | Copied | **Skipped** |
+| `.github/` workflows | Optional | Optional |
+
+The installer is idempotent — safe to run multiple times.
+
 ### Step 1: Copy and fill `.env`
 
 ```bash
@@ -136,18 +166,21 @@ Look for states with `type: "started"` (In Progress), `type: "completed"` (Done)
 ### Step 3: Validate environment
 
 ```bash
-chmod +x scripts/dev.sh scripts/harness/gc.sh scripts/harness/validate.sh
-./scripts/dev.sh
+./scripts/harness/validate.sh
 ```
 
 This script:
-- Loads `.env`
-- Checks all required variables are set
-- Validates `WORKSPACE_ROOT` is an absolute path and creates it if absent
-- Runs `./scripts/harness/validate.sh`
-- Detects the stack from `package.json` / `pyproject.toml` / `go.mod` and runs lint + tests if `src/` is populated
+- Checks all required environment variables are set
+- Validates `WORKSPACE_ROOT` is an absolute path
+- Scans for hardcoded secrets and architecture violations
+- Confirms harness scripts are executable
 
-**If the script fails:** Read the error message carefully. Each error includes the exact fix instruction. For example:
+For new projects, you can also run the full bootstrap (lint + tests):
+```bash
+./scripts/dev.sh
+```
+
+**If validation fails:** Each error includes the exact fix instruction. For example:
 ```
 FAIL: WORKSPACE_ROOT is not set.
   → Add WORKSPACE_ROOT=/absolute/path to .env
