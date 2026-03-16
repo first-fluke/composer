@@ -1,0 +1,250 @@
+---
+description: Ultrawork - high-quality 5-phase development workflow with 11 review steps out of 17
+---
+
+# MANDATORY RULES — VIOLATION IS FORBIDDEN
+
+- **Response language follows `language` setting in `.agents/config/user-preferences.yaml` if configured.**
+- **NEVER skip steps.** Execute from Step 0 in order. Explicitly report completion of each step to the user before proceeding to the next.
+- **You MUST use MCP tools throughout the entire workflow.** This is NOT optional.
+  - Use code analysis tools (`get_symbols_overview`, `find_symbol`, `find_referencing_symbols`, `search_for_pattern`) for code exploration.
+  - Use memory tools (read/write/edit) for progress tracking.
+  - Memory path: configurable via `memoryConfig.basePath` (default: `.serena/memories`)
+  - Tool names: configurable via `memoryConfig.tools` in `mcp.json`
+  - Do NOT use raw file reads or grep as substitutes. MCP tools are the primary interface for code and memory operations.
+- **Read the workflow-guide BEFORE starting.** Read `.agents/skills/workflow-guide/SKILL.md` and follow its Core Rules.
+- **Follow the context-loading guide.** Read `.agents/skills/_shared/context-loading.md` and load only task-relevant resources.
+
+---
+
+## Phase 0: Initialization (DO NOT SKIP)
+
+1. Read `.agents/skills/workflow-guide/SKILL.md` and confirm Core Rules.
+2. Read `.agents/skills/_shared/context-loading.md` for resource loading strategy.
+3. Read `.agents/skills/_shared/memory-protocol.md` for memory protocol.
+4. Read `.agents/skills/_shared/multi-review-protocol.md` (11 review guides)
+5. Read `.agents/skills/_shared/quality-principles.md` (4 principles)
+6. Read `.agents/skills/_shared/phase-gates.md` (gate definitions)
+7. Record session start using memory write tool:
+   - Create `session-ultrawork.md` in the memory base path
+   - Include: session start time, user request summary, workflow version (ultrawork)
+
+---
+
+## Phase 1: PLAN (Steps 1-4)
+
+### Step 1: Create Plan & Review
+// turbo
+Activate PM Agent to execute Steps 1-4:
+
+1. Analyze requirements.
+2. Define API contracts.
+3. Create a prioritized task breakdown.
+4. Execute Plan Review - Completeness (Step 2).
+5. Execute Meta Review (Step 3).
+6. Execute Over-Engineering Review (Step 4).
+7. Save plan to `.agents/plan.json`.
+8. Create `task-board.md` in memory path for dashboard compatibility.
+9. Use memory write tool to record plan completion.
+
+### Step 2: Plan Review (Completeness)
+- **Executed by PM Agent**: Ensure requirements are fully mapped.
+
+### Step 3: Review Verification (Meta Review)
+- **Executed by PM Agent**: Self-verify if the review was sufficient.
+
+### Step 4: Over-Engineering Review (Simplicity)
+- **Executed by PM Agent**: Check for unnecessary complexity (MVP focus).
+
+### PLAN_GATE
+- [ ] Plan documented
+- [ ] Assumptions listed
+- [ ] Alternatives considered
+- [ ] Over-engineering review done
+- [ ] **User confirmation**
+
+**On gate pass**: Use memory edit tool to record phase completion in `session-ultrawork.md`
+
+**Gate failure → Return to Step 1**
+
+---
+
+## Phase 2: IMPL (Step 5)
+
+### Step 5: Implementation
+// turbo
+Spawn Implementation Agents (Backend/Frontend/Mobile) in parallel.
+Command:
+```bash
+oh-my-ag agent:spawn backend "Implement backend tasks per plan. IMPORTANT: Follow .agents/skills/_shared/context-loading.md rules." session-id -w ./backend &
+oh-my-ag agent:spawn frontend "Implement frontend tasks per plan. IMPORTANT: Follow .agents/skills/_shared/context-loading.md rules." session-id -w ./frontend &
+wait
+```
+
+---
+
+### Step 5.1: Monitor & Wait for Completion
+
+**Wait for all implementation agents to complete before proceeding.**
+
+1. Use memory read tool to poll `progress-{agent}.md` files
+2. Use MCP code analysis tools to verify implementation alignment
+3. Check for `result-{agent}.md` files to confirm completion
+4. Use memory edit tool to record monitoring results in `session-ultrawork.md`
+
+**Continue polling until all agents report completion or failure.**
+
+### IMPL_GATE
+- [ ] Build succeeds
+- [ ] Tests pass
+- [ ] Only planned files modified
+
+**On gate pass**: Use memory edit tool to record phase completion in `session-ultrawork.md`
+
+**Gate failure → Return to Step 5, re-spawn failed agents, and repeat monitoring until GATE passes.**
+
+---
+
+## Phase 3: VERIFY (Steps 6-8)
+
+### Step 6-8: QA Verification
+// turbo
+Spawn QA Agent to execute Steps 6-8.
+Command: `oh-my-ag agent:spawn qa-agent "Execute Phase 3 Verification. Step 6: Alignment Review. Step 7: Security/Bug Review (npm audit, OWASP). Step 8: Improvement/Regression Review. IMPORTANT: Follow .agents/skills/_shared/context-loading.md rules." session-id`
+
+---
+
+### Monitor QA Agent Progress
+
+**Wait for QA Agent to complete verification before proceeding.**
+
+1. Use memory read tool to poll `progress-qa-agent.md`
+2. Check for `result-qa-agent.md` to confirm completion
+3. Use memory edit tool to record QA results in `session-ultrawork.md`
+
+**Continue polling until QA Agent reports completion.**
+
+### Step 6: Alignment Review
+- **Executed by QA Agent**: Compare implementation vs plan.
+
+### Step 7: Security/Bug Review (Safety)
+- **Executed by QA Agent**: Check for vulnerabilities (Safety).
+
+### Step 8: Improvement Review (Regression Prevention)
+- **Executed by QA Agent**: Run regression tests.
+
+### VERIFY_GATE
+- [ ] Implementation = Requirements
+- [ ] CRITICAL count: 0
+- [ ] HIGH count: 0
+- [ ] No regressions
+
+**On gate pass**: Use memory edit tool to record phase completion in `session-ultrawork.md`
+
+**Gate failure → Return to Step 5, fix implementation issues, and repeat VERIFY phase until GATE passes.**
+
+---
+
+## Phase 4: REFINE (Steps 9-13)
+
+### Step 9-13: Deep Refinement
+// turbo
+Spawn Debug Agent (or Senior Dev Agent) to execute Steps 9-13.
+Command: `oh-my-ag agent:spawn debug-agent "Execute Phase 4 Refine. Step 9: Split large files. Step 10: Integration check. Step 11: Side Effect analysis (find_referencing_symbols). Step 12: Consistency review. Step 13: Cleanup dead code. IMPORTANT: Follow .agents/skills/_shared/context-loading.md rules." session-id`
+
+---
+
+### Monitor Debug Agent Progress
+
+**Wait for Debug Agent to complete refinement before proceeding.**
+
+1. Use memory read tool to poll `progress-debug-agent.md`
+2. Check for `result-debug-agent.md` to confirm completion
+3. Use memory edit tool to record refinement results in `session-ultrawork.md`
+
+**Continue polling until Debug Agent reports completion.**
+
+### Step 9: Split Large Files/Functions
+- **Executed by Debug Agent**: Files > 500 lines, Functions > 50 lines.
+
+### Step 10: Integration/Reuse Review (Reusability)
+- **Executed by Debug Agent**: Check for duplicate logic.
+
+### Step 11: Side Effect Review (Cascade Impact)
+- **Executed by Debug Agent**: Analyze impact scope.
+
+### Step 12: Full Change Review (Consistency)
+- **Executed by Debug Agent**: Review naming and style.
+
+### Step 13: Clean Up Unused Code
+- **Executed by Debug Agent**: Remove newly created dead code.
+
+### REFINE_GATE
+- [ ] No large files/functions
+- [ ] Integration opportunities captured
+- [ ] Side effects verified
+- [ ] Code cleaned
+
+**On gate pass**: Use memory edit tool to record phase completion in `session-ultrawork.md`
+
+**Gate failure → Re-spawn Debug Agent with specific issues and repeat until GATE passes.**
+
+**Skip conditions**: Simple tasks < 50 lines
+
+---
+
+## Phase 5: SHIP (Steps 14-17)
+
+### Step 14-17: Final QA & Deployment Readiness
+// turbo
+Spawn QA Agent to execute Steps 14-17.
+Command: `oh-my-ag agent:spawn qa-agent "Execute Phase 5 Ship. Step 14: Quality Review (lint/coverage). Step 15: UX Flow Verification. Step 16: Related Issues Review. Step 17: Deployment Readiness. IMPORTANT: Follow .agents/skills/_shared/context-loading.md rules." session-id`
+
+---
+
+### Monitor Final QA Progress
+
+**Wait for QA Agent to complete final review before proceeding.**
+
+1. Use memory read tool to poll `progress-qa-agent.md`
+2. Check for `result-qa-agent.md` to confirm completion
+3. Use memory edit tool to record final QA results in `session-ultrawork.md`
+
+**Continue polling until QA Agent reports completion.**
+
+### Step 14: Code Quality Review
+- **Executed by QA Agent**: Lint, Types, Coverage.
+
+### Step 15: UX Flow Verification
+- **Executed by QA Agent**: User journey check.
+
+### Step 16: Related Issues Review (Cascade Impact 2nd)
+- **Executed by QA Agent**: Final impact check.
+
+### Step 17: Deployment Readiness Review (Final)
+- **Executed by QA Agent**: Secrets, Migrations, checklist.
+
+### SHIP_GATE
+- [ ] Quality checks pass
+- [ ] UX verified
+- [ ] Related issues resolved
+- [ ] Deployment checklist complete
+- [ ] **User final approval**
+
+**On gate pass**: Use memory write tool to record final results in `session-ultrawork.md`
+
+**Gate failure → Address issues, re-run affected steps, and repeat until GATE passes.**
+
+---
+
+## Review Steps Summary
+
+| Phase  | Steps | Agent       | Execution | Perspective                       |
+| ------ | ----- | ----------- | --------- | --------------------------------- |
+| PLAN   | 1-4   | PM Agent    | Inline    | Completeness, Meta, Simplicity    |
+| IMPL   | 5     | Dev Agents  | Spawn     | Implementation                    |
+| VERIFY | 6-8   | QA Agent    | Spawn     | Alignment, Safety, Regression     |
+| REFINE | 9-13  | Debug Agent | Spawn     | Reusability, Cascade, Consistency |
+| SHIP   | 14-17 | QA Agent    | Spawn     | Quality, UX, Cascade 2nd, Deploy  |
+
+**Total 11 review steps → High quality guaranteed (PM Agent inline, others spawned)**

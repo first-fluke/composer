@@ -1,0 +1,30 @@
+{
+  "task": "Wave 1~3 전체 구현 (ultrawork)",
+  "created": "2026-03-16",
+  "clean_code_constraints": ["SRP", "DRY", "명확한 의도"],
+  "waves": {
+    "wave1": {
+      "files": ["AGENTS.md"],
+      "agent": "single",
+      "blocks": ["wave2"]
+    },
+    "wave2": {
+      "parallel": true,
+      "groups": {
+        "A": ["docs/specs/domain-models.md","docs/specs/workflow-loader.md","docs/specs/config-layer.md","docs/specs/tracker-client.md","docs/specs/orchestrator.md","docs/specs/workspace-manager.md","docs/specs/agent-runner.md","docs/specs/observability.md"],
+        "B": ["docs/architecture/LAYERS.md","docs/architecture/CONSTRAINTS.md","docs/architecture/enforcement/typescript.md","docs/architecture/enforcement/python.md","docs/architecture/enforcement/go.md","docs/stacks/typescript.md","docs/stacks/python.md","docs/stacks/go.md"],
+        "C": ["docs/harness/LEGIBILITY.md","docs/harness/FEEDBACK-LOOPS.md","docs/harness/ENTROPY.md","docs/harness/SAFETY.md"],
+        "D": ["WORKFLOW.md",".env.example"]
+      },
+      "blocks": ["wave3"]
+    },
+    "wave3": {
+      "parallel": true,
+      "groups": {
+        "E": [".github/workflows/ci.yml",".github/workflows/harness-gc.yml",".github/.pre-commit-config.yaml",".github/PULL_REQUEST_TEMPLATE.md","scripts/dev.sh","scripts/harness/gc.sh","scripts/harness/validate.sh"],
+        "F": ["CLAUDE.md",".agents/skills/symphony-scaffold/SKILL.md",".agents/skills/symphony-component/SKILL.md",".agents/skills/symphony-conformance/SKILL.md",".agents/skills/harness-gc/SKILL.md",".claude/agents/symphony-architect.md",".claude/agents/symphony-implementer.md",".claude/agents/symphony-reviewer.md"]
+      }
+    }
+  },
+  "status": "in_progress"
+}
