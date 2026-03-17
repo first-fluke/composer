@@ -1,16 +1,16 @@
-# 환경변수
+# Environment
 .env
 .env.local
 .env.*.local
 
-# 의존성
+# Dependencies
 node_modules/
 __pycache__/
 *.pyc
 .venv/
 venv/
 
-# 빌드 결과물
+# Build
 dist/
 build/
 *.egg-info/
@@ -25,14 +25,18 @@ build/
 .DS_Store
 Thumbs.db
 
-# 로그
+# Logs
 *.log
 logs/
 
-# 임시 파일
+# Temp
 *.tmp
 .cache/
 
-# 툴 내부 파일
+# Planning (local only)
+PLAN.md
+docs/plans/
+
+# Tool internals
 .serena/
 .superset/
