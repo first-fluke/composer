@@ -12,7 +12,7 @@ This repository is a **ready-to-use project template** for teams that want to ru
 
 Inspired by OpenAI's [Harness Engineering](https://openai.com/index/harness-engineering/) approach — 3 engineers, 5 months, ~1 million lines of code, zero manually written lines, 3.5 PRs per engineer per day — this template gives you the scaffolding to replicate that workflow.
 
-The template is **stack-agnostic**. Architecture principles, documentation, CI, and agent harness are all in place. You choose the implementation language (TypeScript, Python, or Go) and fill in `src/` when you're ready.
+The orchestrator is built with **TypeScript + Bun** (zero external dependencies beyond Zod). It supports **Claude Code, Codex, and Gemini CLI** out of the box via the AgentSession abstraction — and you can add custom agents by implementing a single interface.
 
 ---
 
@@ -22,13 +22,13 @@ The template is **stack-agnostic**. Architecture principles, documentation, CI, 
 Linear Issue (In Progress)
         │
         ▼
-  Orchestrator  ──polls──▶  Linear GraphQL API
+  Orchestrator  ──webhook──▶  Linear Webhook Events
         │
         ▼  (per issue)
   WorkspaceManager  ──creates──▶  git worktree  {WORKSPACE_ROOT}/{issue-key}/
         │
         ▼
-  AgentRunner  ──spawns──▶  codex serve  (stdin: rendered WORKFLOW.md prompt)
+  AgentRunner  ──spawns──▶  AgentSession (claude/gemini/codex)  (rendered WORKFLOW.md prompt)
         │
         ▼
   Agent works in isolated worktree, commits, opens PR
@@ -57,9 +57,9 @@ agent-template/
 │   │   ├── workflow-loader.md       ← WORKFLOW.md parsing spec
 │   │   ├── config-layer.md          ← Typed config + $VAR resolution
 │   │   ├── tracker-client.md        ← Linear GraphQL adapter spec
-│   │   ├── orchestrator.md          ← Polling loop, state machine, retry queue
+│   │   ├── orchestrator.md          ← Webhook event handler, state machine, retry queue
 │   │   ├── workspace-manager.md     ← Per-issue worktree lifecycle
-│   │   ├── agent-runner.md          ← JSON-RPC over stdio, SPEC §17 test matrix
+│   │   ├── agent-runner.md          ← AgentSession abstraction, SPEC §17 test matrix
 │   │   └── observability.md         ← Structured logs, metrics, optional OTEL
 │   │
 │   ├── architecture/
@@ -118,6 +118,20 @@ agent-template/
 
 ---
 
+## Quick Start
+
+```bash
+git clone https://github.com/first-fluke/composer.git my-project
+cd my-project
+bun install
+cp .env.example .env   # Fill in LINEAR_API_KEY, LINEAR_WEBHOOK_SECRET, etc.
+bun run src/main.ts    # Orchestrator starts on :8080
+```
+
+Then set up a Linear webhook pointing to `https://your-host:8080/webhook`, and move an issue to "In Progress" — Symphony handles the rest.
+
+---
+
 ## Installation
 
 Composer works for both **new projects** (full scaffold) and **existing projects** (harness overlay only). The installer auto-detects which mode to use.
@@ -136,15 +150,18 @@ git init
 git add -A
 git commit -m "chore: init from composer"
 
+# Install dependencies
+bun install
+
 # Configure environment
 cp .env.example .env
-# Edit .env with your values (LINEAR_API_KEY, WORKSPACE_ROOT, etc.)
+# Edit .env with your values (LINEAR_API_KEY, LINEAR_WEBHOOK_SECRET, WORKSPACE_ROOT, etc.)
 
-# Validate
-./scripts/harness/validate.sh
+# Start the orchestrator
+bun run src/main.ts
 ```
 
-Everything is already in place — `src/` is empty and ready for your implementation. No need to run `install.sh` for a fresh clone.
+The orchestrator starts on `:8080` and listens for Linear webhooks. See [`docs/guides/environment-setup.md`](docs/guides/environment-setup.md) for detailed Linear webhook setup.
 
 ### Existing project
 
@@ -233,9 +250,9 @@ Or use the built-in Claude Code skill:
 | 1 | **Workflow Loader** | Parse `WORKFLOW.md` — YAML front matter + prompt body | `docs/specs/workflow-loader.md` |
 | 2 | **Config Layer** | Typed config object + `$VAR` environment variable resolution | `docs/specs/config-layer.md` |
 | 3 | **Issue Tracker Client** | Linear GraphQL adapter — fetch in-progress issues | `docs/specs/tracker-client.md` |
-| 4 | **Orchestrator** | Polling loop, state machine, retry queue, single in-memory state authority | `docs/specs/orchestrator.md` |
+| 4 | **Orchestrator** | Webhook event handler, state machine, retry queue, single in-memory state authority | `docs/specs/orchestrator.md` |
 | 5 | **Workspace Manager** | Per-issue `git worktree` creation, lifecycle hooks, GC | `docs/specs/workspace-manager.md` |
-| 6 | **Agent Runner** | Spawn `codex serve`, JSON-RPC over stdio, timeout enforcement | `docs/specs/agent-runner.md` |
+| 6 | **Agent Runner** | Spawn agent via AgentSession abstraction (claude/gemini/codex), timeout enforcement | `docs/specs/agent-runner.md` |
 | 7 | **Observability** | Structured JSON logs (stdout), optional status HTTP surface, optional OTEL | `docs/specs/observability.md` |
 
 ### Domain Models
@@ -348,7 +365,7 @@ tracker:
   type: linear
   api_key: $LINEAR_API_KEY
   team_id: $LINEAR_TEAM_ID
-  poll_interval_seconds: 30
+  webhook_secret: $LINEAR_WEBHOOK_SECRET
   workflow_states:
     in_progress: $LINEAR_WORKFLOW_STATE_IN_PROGRESS
     done: $LINEAR_WORKFLOW_STATE_DONE
@@ -359,8 +376,7 @@ workspace:
   cleanup_after_days: 7
 
 agent:
-  command: "codex"
-  args: ["serve"]
+  type: "codex"  # or "claude", "gemini"
   timeout_seconds: 3600
   max_retries: 3
 ---

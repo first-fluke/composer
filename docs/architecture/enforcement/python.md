@@ -1,29 +1,29 @@
-# Python 아키텍처 강제 — import-linter + Ruff
+# Python Architecture Enforcement — import-linter + Ruff
 
-> 계층 의존성 방향 규칙(`docs/architecture/LAYERS.md`)을 CI에서 자동 검사한다.
+> Automatically checks layer dependency direction rules (`docs/architecture/LAYERS.md`) in CI.
 
 ---
 
-## 설치
+## Installation
 
 ```bash
 pip install import-linter
-# 또는 uv 사용 시
+# or with uv
 uv add --dev import-linter
 ```
 
 ---
 
-## .importlinter 설정 예시
+## .importlinter Configuration Example
 
-프로젝트 루트에 `.importlinter`를 생성한다.
+Create `.importlinter` in the project root.
 
 ```ini
 [importlinter]
 root_package = src
 
 [importlinter:contract:no-domain-to-infrastructure]
-name = Domain 계층은 Infrastructure를 import하지 않는다
+name = Domain layer must not import from Infrastructure
 type = forbidden
 source_modules =
     src.domain
@@ -31,7 +31,7 @@ forbidden_modules =
     src.infrastructure
 
 [importlinter:contract:no-domain-to-application]
-name = Domain 계층은 Application을 import하지 않는다
+name = Domain layer must not import from Application
 type = forbidden
 source_modules =
     src.domain
@@ -39,7 +39,7 @@ forbidden_modules =
     src.application
 
 [importlinter:contract:no-domain-to-presentation]
-name = Domain 계층은 Presentation을 import하지 않는다
+name = Domain layer must not import from Presentation
 type = forbidden
 source_modules =
     src.domain
@@ -47,7 +47,7 @@ forbidden_modules =
     src.presentation
 
 [importlinter:contract:no-infrastructure-to-application]
-name = Infrastructure 계층은 Application을 import하지 않는다
+name = Infrastructure layer must not import from Application
 type = forbidden
 source_modules =
     src.infrastructure
@@ -55,7 +55,7 @@ forbidden_modules =
     src.application
 
 [importlinter:contract:no-infrastructure-to-presentation]
-name = Infrastructure 계층은 Presentation을 import하지 않는다
+name = Infrastructure layer must not import from Presentation
 type = forbidden
 source_modules =
     src.infrastructure
@@ -63,7 +63,7 @@ forbidden_modules =
     src.presentation
 
 [importlinter:contract:layers]
-name = 계층 의존성 방향 순서
+name = Layer dependency direction order
 type = layers
 layers =
     src.presentation
@@ -72,19 +72,19 @@ layers =
     src.infrastructure
 ```
 
-`type = layers` 계약은 위에서 아래 방향 의존만 허용하며 역방향을 자동으로 금지한다. `forbidden` 계약은 특정 위반을 명시적으로 잡는다. 둘 다 설정하면 중복 검사로 누락을 방지한다.
+The `type = layers` contract only allows top-to-bottom dependencies and automatically forbids reverse direction. The `forbidden` contracts explicitly catch specific violations. Configuring both provides redundant checks to prevent any gaps.
 
 ---
 
-## CI 실행
+## CI Execution
 
 ```bash
 lint-imports
 ```
 
-위반 시 exit code 1을 반환한다.
+Returns exit code 1 on violation.
 
-`scripts/harness/validate.sh`에 추가:
+Add to `scripts/harness/validate.sh`:
 
 ```bash
 #!/usr/bin/env bash
@@ -98,9 +98,9 @@ echo "==> Architecture check passed."
 
 ---
 
-## Ruff 연동 — import 순서 강제
+## Ruff Integration — Import Order Enforcement
 
-`pyproject.toml`에 Ruff 설정을 추가한다.
+Add Ruff configuration to `pyproject.toml`.
 
 ```toml
 [tool.ruff]
@@ -111,12 +111,12 @@ target-version = "py312"
 select = [
     "E",   # pycodestyle errors
     "F",   # pyflakes
-    "I",   # isort (import 순서)
+    "I",   # isort (import order)
     "UP",  # pyupgrade
 ]
 
 [tool.ruff.lint.isort]
-# 계층별 import 그룹 순서
+# Import group order by layer
 known-first-party = ["src"]
 section-order = [
     "future",
@@ -128,7 +128,7 @@ section-order = [
 force-sort-within-sections = true
 ```
 
-Ruff 실행:
+Run Ruff:
 
 ```bash
 ruff check src/
@@ -137,12 +137,12 @@ ruff format --check src/
 
 ---
 
-## 위반 시 출력 예시
+## Example Output on Violation
 
 ```
-违반: Domain 계층은 Infrastructure를 import하지 않는다
+Violation: Domain layer must not import from Infrastructure
   src/domain/issue.py imports src/infrastructure/linear_client.py
 
-  Fix: domain/에서 IssueTrackerPort 인터페이스를 정의하고,
-       LinearClient는 infrastructure/에서 해당 인터페이스를 구현한다.
+  Fix: Define an IssueTrackerPort interface in domain/,
+       and implement it with LinearClient in infrastructure/.
 ```

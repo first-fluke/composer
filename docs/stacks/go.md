@@ -1,78 +1,78 @@
-# Go 착수 가이드
+# Go Getting Started Guide
 
-> 이 파일은 Go 스택으로 Symphony 구현을 시작할 때 참조한다.
-> 계층 원칙은 `docs/architecture/LAYERS.md`, 금지 규칙은 `docs/architecture/CONSTRAINTS.md` 참조.
+> Reference this file when starting a Symphony implementation with the Go stack.
+> For layer principles see `docs/architecture/LAYERS.md`, for forbidden patterns see `docs/architecture/CONSTRAINTS.md`.
 
 ---
 
-## 권장 스택
+## Recommended Stack
 
-| 역할 | 선택 |
+| Role | Choice |
 |---|---|
-| 언어 | Go 1.22+ |
-| HTTP 서버 | Echo v4 |
-| SQL 쿼리 | sqlx |
-| DB 마이그레이션 | golang-migrate |
-| 테스트 | testify |
-| 환경변수 | godotenv |
-| 아키텍처/코드 린터 | golangci-lint |
+| Language | Go 1.22+ |
+| HTTP Server | Echo v4 |
+| SQL Queries | sqlx |
+| DB Migrations | golang-migrate |
+| Testing | testify |
+| Environment Variables | godotenv |
+| Architecture/Code Linter | golangci-lint |
 
 ---
 
-## 프로젝트 초기화
+## Project Initialization
 
 ```bash
-# 1. 프로젝트 디렉터리 생성
+# 1. Create project directory
 mkdir my-symphony && cd my-symphony
 
-# 2. Go 모듈 초기화
+# 2. Initialize Go module
 go mod init github.com/your-org/my-symphony
 
-# 3. 핵심 의존성 추가
+# 3. Add core dependencies
 go get github.com/labstack/echo/v4
 go get github.com/jmoiron/sqlx
 go get github.com/golang-migrate/migrate/v4
 go get github.com/joho/godotenv
 
-# 4. 테스트 의존성
+# 4. Test dependencies
 go get github.com/stretchr/testify
 
-# 5. golangci-lint 설치
+# 5. Install golangci-lint
 brew install golangci-lint
-# 또는
+# or
 curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
   | sh -s -- -b $(go env GOPATH)/bin v1.57.2
 ```
 
 ---
 
-## 디렉터리 구조
+## Directory Structure
 
-`docs/architecture/LAYERS.md`에 정의된 계층을 Go 표준 레이아웃과 함께 반영한다.
+Reflects the layers defined in `docs/architecture/LAYERS.md` alongside Go's standard layout.
 
 ```
 my-symphony/
 ├── cmd/
 │   └── server/
-│       └── main.go           ← 진입점: DI 조립 + 서버 시작
+│       └── main.go           ← Entry point: DI assembly + server start
 ├── internal/
 │   ├── domain/
-│   │   ├── issue.go          ← Issue 도메인 모델 (순수 구조체)
-│   │   ├── workspace.go      ← Workspace 도메인 모델
-│   │   ├── run_attempt.go    ← RunAttempt 도메인 모델
+│   │   ├── issue.go          ← Issue domain model (pure struct)
+│   │   ├── workspace.go      ← Workspace domain model
+│   │   ├── run_attempt.go    ← RunAttempt domain model
 │   │   └── ports/
-│   │       ├── issue_tracker.go  ← interface 정의 (Infrastructure가 구현)
+│   │       ├── issue_tracker.go  ← Interface definition (implemented by Infrastructure)
 │   │       └── workspace.go
 │   ├── application/
 │   │   ├── orchestrator/
-│   │   │   ├── poller.go
+│   │   │   ├── webhook_handler.go
 │   │   │   ├── state_machine.go
 │   │   │   ├── retry_queue.go
 │   │   │   └── orchestrator.go
 │   │   └── workspace_manager.go
 │   ├── infrastructure/
 │   │   ├── linear/
-│   │   │   └── client.go     ← IssueTracker interface 구현
+│   │   │   └── client.go     ← IssueTracker interface implementation
 │   │   ├── filesystem/
 │   │   │   └── workspace.go
 │   │   ├── git/
@@ -89,11 +89,11 @@ my-symphony/
 └── go.sum
 ```
 
-`internal/`을 사용하면 Go 컴파일러가 외부 패키지에서의 import를 차단하므로 계층 경계 강제에 유리하다.
+Using `internal/` lets the Go compiler block imports from external packages, which helps enforce layer boundaries.
 
 ---
 
-## 환경변수 로딩 — godotenv
+## Environment Variable Loading — godotenv
 
 ```go
 // cmd/server/main.go
@@ -118,7 +118,7 @@ type Config struct {
 }
 
 func loadConfig() (*Config, error) {
-    // .env 파일 로드 (존재하지 않아도 환경변수로 동작)
+    // Load .env file (works with env vars even if file doesn't exist)
     _ = godotenv.Load()
 
     required := []struct {
@@ -194,22 +194,22 @@ func main() {
         log.Fatalf("Startup failed:\n%v", err)
     }
     _ = cfg
-    // ... 서버 시작
+    // ... start server
 }
 ```
 
 ---
 
-## 린터 실행
+## Linter Execution
 
 ```bash
-# 표준 정적 분석
+# Standard static analysis
 go vet ./...
 
-# 통합 린터
+# Integrated linter
 golangci-lint run ./...
 
-# 도달 불가능한 코드 검출
+# Unreachable code detection
 deadcode -test ./...
 ```
 
@@ -242,10 +242,10 @@ validate: vet lint
 	@echo "Architecture check passed."
 ```
 
-로컬에서는 `make validate`, CI에서는 `scripts/harness/validate.sh`에서 `make validate`를 호출한다.
+Run `make validate` locally; in CI, `scripts/harness/validate.sh` calls `make validate`.
 
 ---
 
-## 아키텍처 린터 연동
+## Architecture Linter Integration
 
-`docs/architecture/enforcement/go.md` 참조하여 `.golangci.yml`을 설정한다.
+Refer to `docs/architecture/enforcement/go.md` to configure `.golangci.yml`.

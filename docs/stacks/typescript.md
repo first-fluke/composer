@@ -1,90 +1,90 @@
-# TypeScript 착수 가이드
+# TypeScript Getting Started Guide
 
-> 이 파일은 TypeScript 스택으로 Symphony 구현을 시작할 때 참조한다.
-> 계층 원칙은 `docs/architecture/LAYERS.md`, 금지 규칙은 `docs/architecture/CONSTRAINTS.md` 참조.
+> Reference this file when starting a Symphony implementation with the TypeScript stack.
+> For layer principles see `docs/architecture/LAYERS.md`, for forbidden patterns see `docs/architecture/CONSTRAINTS.md`.
 
 ---
 
-## 권장 스택
+## Recommended Stack
 
-| 역할 | 선택 |
+| Role | Choice |
 |---|---|
-| 런타임 | Node.js 20+ |
-| 언어 | TypeScript 5+ |
-| HTTP 서버 | Express 또는 Hono |
+| Runtime | Node.js 20+ |
+| Language | TypeScript 5+ |
+| HTTP Server | Express or Hono |
 | ORM | Prisma |
-| 스키마 검증 | Zod |
-| 테스트 | Jest + ts-jest |
-| 아키텍처 린터 | dependency-cruiser |
-| 코드 린터 | ESLint + Prettier |
+| Schema Validation | Zod |
+| Testing | Jest + ts-jest |
+| Architecture Linter | dependency-cruiser |
+| Code Linter | ESLint + Prettier |
 
 ---
 
-## 프로젝트 초기화
+## Project Initialization
 
 ```bash
-# 1. 프로젝트 디렉터리 생성
+# 1. Create project directory
 mkdir my-symphony && cd my-symphony
 
-# 2. npm 초기화
+# 2. Initialize npm
 npm init -y
 
-# 3. TypeScript 설치
+# 3. Install TypeScript
 npm install --save-dev typescript ts-node @types/node
 
-# 4. TypeScript 설정 생성
+# 4. Generate TypeScript config
 npx tsc --init
 
-# 5. 핵심 의존성 설치
+# 5. Install core dependencies
 npm install express zod dotenv
 npm install --save-dev @types/express
 
-# 6. 테스트 도구
+# 6. Testing tools
 npm install --save-dev jest ts-jest @types/jest
 
-# 7. 린터
+# 7. Linters
 npm install --save-dev eslint prettier @typescript-eslint/eslint-plugin @typescript-eslint/parser eslint-config-prettier
 
-# 8. 아키텍처 린터
+# 8. Architecture linter
 npm install --save-dev dependency-cruiser
 ```
 
 ---
 
-## 디렉터리 구조
+## Directory Structure
 
-`docs/architecture/LAYERS.md`에 정의된 계층을 그대로 반영한다.
+Directly reflects the layers defined in `docs/architecture/LAYERS.md`.
 
 ```
 src/
 ├── domain/
-│   ├── issue.ts              ← Issue 도메인 모델
-│   ├── workspace.ts          ← Workspace 도메인 모델
-│   ├── runAttempt.ts         ← RunAttempt 도메인 모델
+│   ├── issue.ts              ← Issue domain model
+│   ├── workspace.ts          ← Workspace domain model
+│   ├── runAttempt.ts         ← RunAttempt domain model
 │   └── ports/
-│       ├── issueTrackerPort.ts  ← 외부 시스템 인터페이스 (Infrastructure가 구현)
+│       ├── issueTrackerPort.ts  ← External system interface (implemented by Infrastructure)
 │       └── workspacePort.ts
 ├── application/
 │   ├── orchestrator/
-│   │   ├── poller.ts
+│   │   ├── webhookHandler.ts
 │   │   ├── stateMachine.ts
 │   │   ├── retryQueue.ts
 │   │   └── index.ts
 │   └── workspaceManager.ts
 ├── infrastructure/
-│   ├── linearApiClient.ts    ← issueTrackerPort 구현
+│   ├── linearApiClient.ts    ← issueTrackerPort implementation
 │   ├── fileSystem.ts
 │   ├── git.ts
 │   └── logger.ts
 ├── presentation/
 │   ├── router.ts
 │   └── cli.ts
-└── index.ts                  ← 진입점: DI 조립 + 서버 시작
+└── index.ts                  ← Entry point: DI assembly + server start
 ```
 
 ---
 
-## tsconfig.json 핵심 설정
+## tsconfig.json Key Settings
 
 ```json
 {
@@ -114,11 +114,11 @@ src/
 }
 ```
 
-`strict: true`는 필수다. 에이전트가 생성하는 코드의 타입 안전성을 강제한다.
+`strict: true` is mandatory. It enforces type safety for agent-generated code.
 
 ---
 
-## 환경변수 로딩 — dotenv + Zod 타입 검증
+## Environment Variable Loading — dotenv + Zod Type Validation
 
 ```typescript
 // src/infrastructure/config.ts
@@ -164,7 +164,7 @@ export const config = parsed.data;
 
 ---
 
-## 린터 설정
+## Linter Configuration
 
 ### ESLint — eslint.config.mjs
 
@@ -212,6 +212,6 @@ export default tseslint.config(
 
 ---
 
-## 아키텍처 린터 연동
+## Architecture Linter Integration
 
-`docs/architecture/enforcement/typescript.md` 참조하여 `.dependency-cruiser.cjs`를 설정한다.
+Refer to `docs/architecture/enforcement/typescript.md` to configure `.dependency-cruiser.cjs`.

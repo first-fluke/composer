@@ -1,76 +1,76 @@
-# Python 착수 가이드
+# Python Getting Started Guide
 
-> 이 파일은 Python 스택으로 Symphony 구현을 시작할 때 참조한다.
-> 계층 원칙은 `docs/architecture/LAYERS.md`, 금지 규칙은 `docs/architecture/CONSTRAINTS.md` 참조.
+> Reference this file when starting a Symphony implementation with the Python stack.
+> For layer principles see `docs/architecture/LAYERS.md`, for forbidden patterns see `docs/architecture/CONSTRAINTS.md`.
 
 ---
 
-## 권장 스택
+## Recommended Stack
 
-| 역할 | 선택 |
+| Role | Choice |
 |---|---|
-| 언어 | Python 3.12+ |
-| HTTP 서버 | FastAPI |
+| Language | Python 3.12+ |
+| HTTP Server | FastAPI |
 | ORM | SQLAlchemy 2.0 |
-| 스키마 검증 | Pydantic v2 |
-| 마이그레이션 | Alembic |
-| 테스트 | pytest + pytest-asyncio |
-| 패키지 관리 | uv |
-| 아키텍처 린터 | import-linter |
-| 코드 린터 | Ruff |
+| Schema Validation | Pydantic v2 |
+| Migrations | Alembic |
+| Testing | pytest + pytest-asyncio |
+| Package Manager | uv |
+| Architecture Linter | import-linter |
+| Code Linter | Ruff |
 
 ---
 
-## 프로젝트 초기화 — uv 기반
+## Project Initialization — uv-based
 
 ```bash
-# 1. uv 설치 (미설치 시)
+# 1. Install uv (if not already installed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# 2. 프로젝트 생성
+# 2. Create project
 uv init my-symphony && cd my-symphony
 
-# 3. Python 버전 고정
+# 3. Pin Python version
 uv python pin 3.12
 
-# 4. 핵심 의존성 추가
+# 4. Add core dependencies
 uv add fastapi uvicorn sqlalchemy alembic pydantic-settings
 
-# 5. 개발 의존성 추가
+# 5. Add dev dependencies
 uv add --dev pytest pytest-asyncio httpx ruff import-linter
 
-# 6. 가상환경 활성화
+# 6. Activate virtual environment
 source .venv/bin/activate
 ```
 
 ---
 
-## 디렉터리 구조
+## Directory Structure
 
-`docs/architecture/LAYERS.md`에 정의된 계층을 그대로 반영한다.
+Directly reflects the layers defined in `docs/architecture/LAYERS.md`.
 
 ```
 src/
 ├── domain/
 │   ├── __init__.py
-│   ├── issue.py              ← Issue 도메인 모델 (순수 dataclass)
-│   ├── workspace.py          ← Workspace 도메인 모델
-│   ├── run_attempt.py        ← RunAttempt 도메인 모델
+│   ├── issue.py              ← Issue domain model (pure dataclass)
+│   ├── workspace.py          ← Workspace domain model
+│   ├── run_attempt.py        ← RunAttempt domain model
 │   └── ports/
 │       ├── __init__.py
-│       ├── issue_tracker_port.py  ← ABC 인터페이스 (Infrastructure가 구현)
+│       ├── issue_tracker_port.py  ← ABC interface (implemented by Infrastructure)
 │       └── workspace_port.py
 ├── application/
 │   ├── __init__.py
 │   ├── orchestrator/
 │   │   ├── __init__.py
-│   │   ├── poller.py
+│   │   ├── webhook_handler.py
 │   │   ├── state_machine.py
 │   │   └── retry_queue.py
 │   └── workspace_manager.py
 ├── infrastructure/
 │   ├── __init__.py
-│   ├── linear_api_client.py  ← issue_tracker_port 구현
+│   ├── linear_api_client.py  ← issue_tracker_port implementation
 │   ├── file_system.py
 │   ├── git.py
 │   └── logger.py
@@ -78,7 +78,7 @@ src/
 │   ├── __init__.py
 │   ├── router.py
 │   └── cli.py
-└── main.py                   ← 진입점: DI 조립 + 서버 시작
+└── main.py                   ← Entry point: DI assembly + server start
 tests/
 ├── domain/
 ├── application/
@@ -87,7 +87,7 @@ tests/
 
 ---
 
-## pyproject.toml 핵심 설정
+## pyproject.toml Key Settings
 
 ```toml
 [project]
@@ -133,7 +133,7 @@ root_package = src
 
 ---
 
-## 환경변수 로딩 — Pydantic Settings
+## Environment Variable Loading — Pydantic Settings
 
 ```python
 # src/infrastructure/config.py
@@ -178,7 +178,7 @@ class Settings(BaseSettings):
         return v
 
 
-# 시작 시점에 한 번만 인스턴스화. 실패 시 즉시 종료.
+# Instantiated once at startup. Terminates immediately on failure.
 try:
     settings = Settings()
 except Exception as e:
@@ -189,21 +189,21 @@ except Exception as e:
 
 ---
 
-## 린터 실행
+## Linter Execution
 
 ```bash
-# 코드 스타일 + import 순서
+# Code style + import ordering
 ruff check src/
 ruff format --check src/
 
-# 계층 의존성 검사
+# Layer dependency check
 lint-imports
 
-# 테스트
+# Tests
 pytest
 ```
 
-### Makefile 통합
+### Makefile Integration
 
 ```makefile
 .PHONY: lint test validate
@@ -222,6 +222,6 @@ validate: lint test
 
 ---
 
-## 아키텍처 린터 연동
+## Architecture Linter Integration
 
-`docs/architecture/enforcement/python.md` 참조하여 `.importlinter`를 설정한다.
+Refer to `docs/architecture/enforcement/python.md` to configure `.importlinter`.

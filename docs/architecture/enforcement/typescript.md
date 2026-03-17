@@ -1,10 +1,10 @@
-# TypeScript 아키텍처 강제 — dependency-cruiser
+# TypeScript Architecture Enforcement — dependency-cruiser
 
-> 계층 의존성 방향 규칙(`docs/architecture/LAYERS.md`)을 CI와 pre-commit에서 자동 검사한다.
+> Automatically checks layer dependency direction rules (`docs/architecture/LAYERS.md`) in CI and pre-commit hooks.
 
 ---
 
-## 설치
+## Installation
 
 ```bash
 npm install --save-dev dependency-cruiser
@@ -12,9 +12,9 @@ npm install --save-dev dependency-cruiser
 
 ---
 
-## .dependency-cruiser.cjs 설정 예시
+## .dependency-cruiser.cjs Configuration Example
 
-프로젝트 루트에 `.dependency-cruiser.cjs`를 생성한다.
+Create `.dependency-cruiser.cjs` in the project root.
 
 ```js
 /** @type {import('dependency-cruiser').IConfiguration} */
@@ -23,7 +23,7 @@ module.exports = {
     {
       name: "no-domain-to-infrastructure",
       comment:
-        "Domain 계층은 Infrastructure를 import할 수 없다. LAYERS.md 참조.",
+        "Domain layer must not import from Infrastructure. See LAYERS.md.",
       severity: "error",
       from: { path: "^src/domain" },
       to: { path: "^src/infrastructure" },
@@ -31,7 +31,7 @@ module.exports = {
     {
       name: "no-domain-to-application",
       comment:
-        "Domain 계층은 Application을 import할 수 없다. LAYERS.md 참조.",
+        "Domain layer must not import from Application. See LAYERS.md.",
       severity: "error",
       from: { path: "^src/domain" },
       to: { path: "^src/application" },
@@ -39,7 +39,7 @@ module.exports = {
     {
       name: "no-domain-to-presentation",
       comment:
-        "Domain 계층은 Presentation을 import할 수 없다. LAYERS.md 참조.",
+        "Domain layer must not import from Presentation. See LAYERS.md.",
       severity: "error",
       from: { path: "^src/domain" },
       to: { path: "^src/presentation" },
@@ -47,7 +47,7 @@ module.exports = {
     {
       name: "no-infrastructure-to-application",
       comment:
-        "Infrastructure 계층은 Application을 import할 수 없다. LAYERS.md 참조.",
+        "Infrastructure layer must not import from Application. See LAYERS.md.",
       severity: "error",
       from: { path: "^src/infrastructure" },
       to: { path: "^src/application" },
@@ -55,7 +55,7 @@ module.exports = {
     {
       name: "no-infrastructure-to-presentation",
       comment:
-        "Infrastructure 계층은 Presentation을 import할 수 없다. LAYERS.md 참조.",
+        "Infrastructure layer must not import from Presentation. See LAYERS.md.",
       severity: "error",
       from: { path: "^src/infrastructure" },
       to: { path: "^src/presentation" },
@@ -63,7 +63,7 @@ module.exports = {
     {
       name: "no-application-to-presentation",
       comment:
-        "Application 계층은 Presentation을 import할 수 없다. LAYERS.md 참조.",
+        "Application layer must not import from Presentation. See LAYERS.md.",
       severity: "error",
       from: { path: "^src/application" },
       to: { path: "^src/presentation" },
@@ -88,15 +88,15 @@ module.exports = {
 
 ---
 
-## CI 실행 명령
+## CI Execution Command
 
 ```bash
 npx depcruise --config .dependency-cruiser.cjs src
 ```
 
-위반 시 exit code 1을 반환하므로 CI가 자동으로 실패한다.
+Returns exit code 1 on violation, causing CI to fail automatically.
 
-`scripts/harness/validate.sh`에 추가 예시:
+Example addition to `scripts/harness/validate.sh`:
 
 ```bash
 #!/usr/bin/env bash
@@ -110,9 +110,9 @@ echo "==> Architecture check passed."
 
 ---
 
-## pre-commit hook 연동
+## pre-commit Hook Integration
 
-`.pre-commit-config.yaml`에 추가:
+Add to `.pre-commit-config.yaml`:
 
 ```yaml
 repos:
@@ -126,7 +126,7 @@ repos:
         types: [typescript]
 ```
 
-또는 `package.json`의 `lint-staged`와 연동:
+Or integrate with `lint-staged` in `package.json`:
 
 ```json
 {
@@ -140,11 +140,11 @@ repos:
 
 ---
 
-## 규칙 위반 시 출력 예시
+## Example Output on Rule Violation
 
 ```
 error no-domain-to-infrastructure: src/domain/issue.ts -> src/infrastructure/linearApiClient.ts
 
-  Domain 계층은 Infrastructure를 import할 수 없다. LAYERS.md 참조.
-  Fix: Domain에서 인터페이스만 정의하고, LinearApiClient는 infrastructure/에 위치시킨다.
+  Domain layer must not import from Infrastructure. See LAYERS.md.
+  Fix: Define only interfaces in Domain, and place LinearApiClient in infrastructure/.
 ```

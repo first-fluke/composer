@@ -287,4 +287,4 @@ fi
 
 printf "\n"
 ok "Dev environment ready."
-info "Start the orchestrator: codex serve"
+info "Start the orchestrator (see AGENTS.md for AGENT_TYPE options: claude, gemini, codex)"

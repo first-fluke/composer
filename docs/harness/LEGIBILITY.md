@@ -1,95 +1,95 @@
-# LEGIBILITY.md — Application Legibility 원칙
+# LEGIBILITY.md — Application Legibility Principles
 
-> Application Legibility란 에이전트가 실행 중에 시스템 상태를 스스로 관찰하고 해석할 수 있는 능력이다.
-> 에이전트가 자신이 무엇을 하고 있는지 볼 수 없으면 올바른 판단을 내릴 수 없다.
+> Application Legibility is the ability of an agent to observe and interpret system state on its own during execution.
+> If an agent cannot see what it is doing, it cannot make correct decisions.
 
 ---
 
-## 1. 워크트리별 격리 부팅
+## 1. Per-Worktree Isolation Boot
 
-### 왜 격리하는가
+### Why Isolate
 
-에이전트가 동시에 여러 이슈를 처리할 때 같은 파일 시스템을 공유하면 충돌이 발생한다.
-워크트리 격리는 에이전트 간 파일 시스템 충돌을 구조적으로 차단한다.
+When agents process multiple issues concurrently, sharing the same file system causes conflicts.
+Worktree isolation structurally prevents file system collisions between agents.
 
-### 패턴
+### Pattern
 
 ```bash
 git worktree add {WORKSPACE_ROOT}/{key} -b issue/{key}
 ```
 
-- `{key}`: `issue.identifier`에서 `[A-Za-z0-9._-]` 외 문자를 `_`로 치환한 값
-- 각 worktree는 독립된 작업 디렉터리를 가진다
-- 에이전트는 자신에게 할당된 worktree 경로 밖에 파일을 쓰지 않는다
+- `{key}`: value derived from `issue.identifier` with characters outside `[A-Za-z0-9._-]` replaced by `_`
+- Each worktree has an independent working directory
+- An agent does not write files outside its assigned worktree path
 
-### 수명주기
+### Lifecycle
 
-| 단계 | 동작 |
+| Phase | Action |
 |---|---|
-| 이슈 할당 | `git worktree add` 실행 |
-| 에이전트 실행 | 해당 worktree 경로에서만 작업 |
-| PR 병합 | worktree 제거 + 브랜치 삭제 |
-| 30일 미사용 | GC 에이전트가 자동 정리 (`docs/harness/ENTROPY.md` 참조) |
+| Issue assignment | Execute `git worktree add` |
+| Agent execution | Work only within the assigned worktree path |
+| PR merge | Remove worktree + delete branch |
+| 30 days unused | GC agent auto-cleans (see `docs/harness/ENTROPY.md`) |
 
-### 구현 참조
+### Implementation Reference
 
-`./scripts/dev.sh` — 원커맨드 개발환경 부팅 (워크트리 생성 포함)
+`./scripts/dev.sh` — one-command dev environment boot (includes worktree creation)
 
 ---
 
 ## 2. Chrome DevTools Protocol (CDP)
 
-### 왜 CDP인가
+### Why CDP
 
-에이전트가 브라우저를 조작하는 태스크(프론트엔드 버그 수정, UI 검증)를 수행할 때,
-에이전트 자신이 렌더링 결과를 볼 수 없으면 시행착오만 반복한다.
-CDP는 에이전트에게 브라우저의 눈을 제공한다.
+When agents perform tasks that involve browser manipulation (frontend bug fixes, UI verification),
+if the agent cannot see the rendering result, it only repeats trial and error.
+CDP gives agents the eyes of the browser.
 
-### 구성
+### Configuration
 
 ```bash
-# 브라우저 실행 시 디버깅 포트 활성화
+# Enable debugging port when launching the browser
 chromium --remote-debugging-port=9222
 ```
 
-### 에이전트가 CDP로 할 수 있는 것
+### What Agents Can Do with CDP
 
-| 기능 | 활용 예시 |
+| Capability | Usage Example |
 |---|---|
-| 스크린샷 캡처 | 렌더링 결과 확인 후 다음 액션 결정 |
-| 네트워크 로그 | API 요청/응답 검증 |
-| DOM 조회 | 엘리먼트 존재 여부 확인 |
-| 콘솔 로그 수집 | 런타임 에러 감지 |
+| Screenshot capture | Inspect rendering results and decide the next action |
+| Network logs | Verify API requests/responses |
+| DOM queries | Check element existence |
+| Console log collection | Detect runtime errors |
 
-### 언제 유용한가
+### When It Is Useful
 
-- 프론트엔드 에이전트가 렌더링 버그를 디버깅할 때
-- UI 에이전트가 폼 제출, 버튼 클릭 등 인터랙션을 검증할 때
-- 시각적 회귀 테스트를 에이전트가 직접 수행할 때
+- When a frontend agent is debugging a rendering bug
+- When a UI agent is verifying interactions such as form submission or button clicks
+- When an agent directly performs visual regression tests
 
-### 주의
+### Caution
 
-CDP는 임시 디버깅 수단이다. 프로덕션 에이전트가 항상 브라우저를 열어 둘 필요는 없다.
-브라우저 접근이 필요 없는 태스크에서는 비활성화한다.
+CDP is a temporary debugging tool. Production agents do not need to keep a browser open at all times.
+Disable it for tasks that do not require browser access.
 
 ---
 
-## 3. 임시 관찰성 스택
+## 3. Ephemeral Observability Stack
 
-### 목적
+### Purpose
 
-에이전트 실행 중 실시간으로 무슨 일이 일어나고 있는지 볼 수 있어야 한다.
-에이전트가 멈춰 있는지, 루프를 돌고 있는지, 아니면 정상적으로 진행 중인지 구분할 수 없으면
-사람이 개입 시점을 판단할 수 없다.
+It must be possible to see what is happening in real time during agent execution.
+If you cannot tell whether an agent is stuck, looping, or progressing normally,
+you cannot determine the right moment for human intervention.
 
-### 구성 요소
+### Components
 
-| 구성 요소 | 형태 | 목적 |
+| Component | Form | Purpose |
 |---|---|---|
-| 구조화된 로그 | JSON (stdout) | 에이전트 액션 타임라인 |
-| HTTP status surface | 선택적, 로컬 포트 | 실시간 상태 조회 |
+| Structured logs | JSON (stdout) | Agent action timeline |
+| HTTP status surface | Optional, local port | Real-time status queries |
 
-### 구조화된 로그 형식
+### Structured Log Format
 
 ```json
 {
@@ -103,24 +103,24 @@ CDP는 임시 디버깅 수단이다. 프로덕션 에이전트가 항상 브라
 }
 ```
 
-모든 에이전트 액션은 이 형식으로 기록된다. 상세 명세: `docs/specs/observability.md`
+All agent actions are recorded in this format. Detailed specification: `docs/specs/observability.md`
 
-### HTTP status surface (선택적)
+### HTTP Status Surface (Optional)
 
-로컬 개발 시 에이전트 상태를 브라우저에서 조회할 수 있는 경량 HTTP 엔드포인트.
+A lightweight HTTP endpoint for querying agent status from a browser during local development.
 
 ```
-GET /status       → 현재 실행 중인 에이전트 목록
-GET /status/{key} → 특정 이슈 처리 상태
+GET /status       -> List of currently running agents
+GET /status/{key} -> Processing status for a specific issue
 ```
 
-프로덕션 배포 시 비활성화하거나 인증을 추가한다.
+Disable or add authentication when deploying to production.
 
 ---
 
-## 참조
+## References
 
-- `AGENTS.md` § Architecture Overview — Observability 컴포넌트 개요
-- `docs/specs/observability.md` — 구조화된 로그 명세 + 측정 지표 수집 포인트
-- `docs/harness/ENTROPY.md` — worktree GC 패턴
-- `docs/harness/SAFETY.md` — 감사 로그 요구사항
+- `AGENTS.md` Section Architecture Overview — Observability component overview
+- `docs/specs/observability.md` — structured log specification + metric collection points
+- `docs/harness/ENTROPY.md` — worktree GC pattern
+- `docs/harness/SAFETY.md` — audit log requirements

@@ -1,32 +1,32 @@
-# Go 아키텍처 강제 — go vet + golangci-lint
+# Go Architecture Enforcement — go vet + golangci-lint
 
-> 계층 의존성 방향 규칙(`docs/architecture/LAYERS.md`)을 CI와 로컬 개발 환경에서 자동 검사한다.
+> Automatically checks layer dependency direction rules (`docs/architecture/LAYERS.md`) in CI and local development environments.
 
 ---
 
-## 도구
+## Tools
 
-| 도구 | 역할 |
+| Tool | Role |
 |---|---|
-| `go vet` | 표준 정적 분석. 컴파일러가 잡지 못하는 버그 패턴 검사. |
-| `golangci-lint` | 계층 import 제한, 복잡도, 코드 스타일 통합 린터. |
-| `deadcode` | 도달 불가능한 코드 검출. |
+| `go vet` | Standard static analysis. Catches bug patterns the compiler misses. |
+| `golangci-lint` | Unified linter for layer import restrictions, complexity, and code style. |
+| `deadcode` | Detects unreachable code. |
 
 ---
 
-## 패키지 구조 규칙
+## Package Structure Rules
 
-Go의 패키지 구조는 계층을 명확하게 반영한다.
+Go's package structure clearly reflects the layers.
 
 ```
 src/
-├── domain/          ← Domain 계층: 순수 Go 구조체 + 인터페이스. 외부 의존 없음.
-├── application/     ← Application 계층: 유스케이스 조율.
-├── infrastructure/  ← Infrastructure 계층: 외부 시스템 구현체.
-└── presentation/    ← Presentation 계층: HTTP 핸들러, CLI.
+├── domain/          <- Domain layer: pure Go structs + interfaces. No external dependencies.
+├── application/     <- Application layer: use case orchestration.
+├── infrastructure/  <- Infrastructure layer: external system implementations.
+└── presentation/    <- Presentation layer: HTTP handlers, CLI.
 ```
 
-표준 Go 레이아웃과 혼용 시:
+When combined with the standard Go layout:
 
 ```
 cmd/
@@ -39,13 +39,13 @@ internal/
 └── presentation/
 ```
 
-`internal/`을 사용하면 패키지 외부에서 import를 차단하는 Go 컴파일러 기능을 활용할 수 있다.
+Using `internal/` leverages the Go compiler's built-in feature that blocks imports from outside the package.
 
 ---
 
-## golangci-lint 설정
+## golangci-lint Configuration
 
-프로젝트 루트에 `.golangci.yml`을 생성한다.
+Create `.golangci.yml` in the project root.
 
 ```yaml
 linters:
@@ -68,17 +68,17 @@ linters-settings:
         deny:
           - pkg: "*/infrastructure"
             desc: >
-              Domain 계층은 Infrastructure를 import할 수 없다.
-              LAYERS.md 참조.
-              Fix: domain/ 에 인터페이스를 정의하고 infrastructure/ 에서 구현하라.
+              Domain layer must not import from Infrastructure.
+              See LAYERS.md.
+              Fix: Define interfaces in domain/ and implement them in infrastructure/.
           - pkg: "*/application"
             desc: >
-              Domain 계층은 Application을 import할 수 없다.
-              LAYERS.md 참조.
+              Domain layer must not import from Application.
+              See LAYERS.md.
           - pkg: "*/presentation"
             desc: >
-              Domain 계층은 Presentation을 import할 수 없다.
-              LAYERS.md 참조.
+              Domain layer must not import from Presentation.
+              See LAYERS.md.
       infrastructure-no-application:
         list-mode: lax
         files:
@@ -86,12 +86,12 @@ linters-settings:
         deny:
           - pkg: "*/application"
             desc: >
-              Infrastructure 계층은 Application을 import할 수 없다.
-              LAYERS.md 참조.
+              Infrastructure layer must not import from Application.
+              See LAYERS.md.
           - pkg: "*/presentation"
             desc: >
-              Infrastructure 계층은 Presentation을 import할 수 없다.
-              LAYERS.md 참조.
+              Infrastructure layer must not import from Presentation.
+              See LAYERS.md.
 
   cyclop:
     max-complexity: 10
@@ -109,20 +109,20 @@ issues:
 
 ---
 
-## deadcode 설치 및 사용
+## deadcode Installation and Usage
 
 ```bash
 go install golang.org/x/tools/cmd/deadcode@latest
 deadcode -test ./...
 ```
 
-도달 불가능한 함수 및 메서드를 보고한다. 계층 분리 후 사용되지 않는 인터페이스 메서드를 찾는 데 유용하다.
+Reports unreachable functions and methods. Useful for finding unused interface methods after layer separation.
 
 ---
 
-## Makefile target
+## Makefile Target
 
-프로젝트 루트의 `Makefile`에 추가한다.
+Add to the `Makefile` in the project root.
 
 ```makefile
 .PHONY: lint vet deadcode validate
@@ -140,13 +140,13 @@ validate: vet lint
 	@echo "Architecture check passed."
 ```
 
-로컬 실행:
+Local execution:
 
 ```bash
 make validate
 ```
 
-CI에서 `scripts/harness/validate.sh`에 추가:
+Add to `scripts/harness/validate.sh` for CI:
 
 ```bash
 #!/usr/bin/env bash
@@ -160,15 +160,15 @@ echo "==> Architecture check passed."
 
 ---
 
-## golangci-lint 설치
+## golangci-lint Installation
 
 ```bash
 # macOS
 brew install golangci-lint
 
-# 또는 공식 설치 스크립트
+# or using the official install script
 curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
   | sh -s -- -b $(go env GOPATH)/bin v1.57.2
 ```
 
-버전은 `golangci-lint --version`으로 확인한다. CI와 로컬이 동일한 버전을 사용해야 한다.
+Verify the version with `golangci-lint --version`. CI and local environments must use the same version.
