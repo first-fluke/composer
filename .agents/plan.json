@@ -1,30 +1,49 @@
 {
-  "task": "Wave 1~3 전체 구현 (ultrawork)",
-  "created": "2026-03-16",
-  "clean_code_constraints": ["SRP", "DRY", "명확한 의도"],
+  "name": "Symphony Orchestrator — Full Implementation",
+  "status": "approved",
+  "created": "2026-03-17",
+  "stack": "TypeScript + Bun",
+  "design_doc": "docs/plans/agent-session-abstraction.md",
   "waves": {
     "wave1": {
-      "files": ["AGENTS.md"],
-      "agent": "single",
-      "blocks": ["wave2"]
+      "parallel": true,
+      "tasks": [
+        { "id": "T1", "title": "domain/models.ts", "file": "src/domain/models.ts", "status": "pending" },
+        { "id": "T2", "title": "observability/logger.ts", "file": "src/observability/logger.ts", "status": "pending" },
+        { "id": "T3", "title": "config/config.ts", "file": "src/config/config.ts", "status": "pending" }
+      ]
     },
     "wave2": {
       "parallel": true,
-      "groups": {
-        "A": ["docs/specs/domain-models.md","docs/specs/workflow-loader.md","docs/specs/config-layer.md","docs/specs/tracker-client.md","docs/specs/orchestrator.md","docs/specs/workspace-manager.md","docs/specs/agent-runner.md","docs/specs/observability.md"],
-        "B": ["docs/architecture/LAYERS.md","docs/architecture/CONSTRAINTS.md","docs/architecture/enforcement/typescript.md","docs/architecture/enforcement/python.md","docs/architecture/enforcement/go.md","docs/stacks/typescript.md","docs/stacks/python.md","docs/stacks/go.md"],
-        "C": ["docs/harness/LEGIBILITY.md","docs/harness/FEEDBACK-LOOPS.md","docs/harness/ENTROPY.md","docs/harness/SAFETY.md"],
-        "D": ["WORKFLOW.md",".env.example"]
-      },
-      "blocks": ["wave3"]
+      "depends_on": ["wave1"],
+      "tasks": [
+        { "id": "T4", "title": "config/workflow-loader.ts", "file": "src/config/workflow-loader.ts", "status": "pending" },
+        { "id": "T5", "title": "tracker/ (types + webhook + linear client)", "files": ["src/tracker/types.ts", "src/tracker/webhook-handler.ts", "src/tracker/linear-client.ts"], "status": "pending" },
+        { "id": "T6", "title": "workspace/workspace-manager.ts", "file": "src/workspace/workspace-manager.ts", "status": "pending" }
+      ]
     },
     "wave3": {
       "parallel": true,
-      "groups": {
-        "E": [".github/workflows/ci.yml",".github/workflows/harness-gc.yml",".github/.pre-commit-config.yaml",".github/PULL_REQUEST_TEMPLATE.md","scripts/dev.sh","scripts/harness/gc.sh","scripts/harness/validate.sh"],
-        "F": ["CLAUDE.md",".agents/skills/symphony-scaffold/SKILL.md",".agents/skills/symphony-component/SKILL.md",".agents/skills/symphony-conformance/SKILL.md",".agents/skills/harness-gc/SKILL.md",".claude/agents/symphony-architect.md",".claude/agents/symphony-implementer.md",".claude/agents/symphony-reviewer.md"]
-      }
+      "depends_on": ["wave2"],
+      "tasks": [
+        { "id": "T7", "title": "orchestrator/retry-queue.ts", "file": "src/orchestrator/retry-queue.ts", "status": "pending" },
+        { "id": "T8", "title": "orchestrator/agent-runner.ts", "file": "src/orchestrator/agent-runner.ts", "status": "pending" },
+        { "id": "T9", "title": "server/http-server.ts", "file": "src/server/http-server.ts", "status": "pending" }
+      ]
+    },
+    "wave4": {
+      "parallel": false,
+      "depends_on": ["wave3"],
+      "tasks": [
+        { "id": "T10", "title": "orchestrator/orchestrator.ts", "file": "src/orchestrator/orchestrator.ts", "status": "pending" },
+        { "id": "T11", "title": "main.ts (entry point)", "file": "src/main.ts", "status": "pending" }
+      ]
+    },
+    "wave5": {
+      "depends_on": ["wave4"],
+      "tasks": [
+        { "id": "T12", "title": "E2E test", "status": "pending" }
+      ]
     }
-  },
-  "status": "in_progress"
+  }
 }
