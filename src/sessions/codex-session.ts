@@ -78,7 +78,7 @@ export class CodexSession extends BaseSession {
     })
   }
 
-  async cancel(): Promise<void> {
+  override async cancel(): Promise<void> {
     if (this.threadId) {
       try {
         await this.rpc("turn/interrupt", { threadId: this.threadId })
@@ -90,7 +90,7 @@ export class CodexSession extends BaseSession {
     }
   }
 
-  async dispose(): Promise<void> {
+  override async dispose(): Promise<void> {
     for (const [id, { reject }] of Array.from(this.pendingResolvers.entries())) {
       reject(new Error(`Session disposed while waiting for RPC id=${id}`))
     }

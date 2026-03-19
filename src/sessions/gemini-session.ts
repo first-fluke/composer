@@ -59,7 +59,7 @@ export class GeminiSession extends BaseSession {
     }
   }
 
-  isAlive(): boolean {
+  override isAlive(): boolean {
     if (!this.process) return this.started
     return this.process.exitCode === null
   }

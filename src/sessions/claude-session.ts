@@ -70,7 +70,7 @@ export class ClaudeSession extends BaseSession {
     await this.readStream()
   }
 
-  isAlive(): boolean {
+  override isAlive(): boolean {
     if (!this.process) return this.started
     return this.process.exitCode === null
   }

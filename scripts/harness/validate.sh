@@ -173,6 +173,11 @@ while IFS= read -r file; do
     *) continue ;;
   esac
 
+  # Skip this script itself (contains patterns as detection strings)
+  case "${file}" in
+    scripts/harness/validate.sh) continue ;;
+  esac
+
   # rm -rf with filesystem root or workspace root
   if grep -qE 'rm\s+-[rf]{1,2}\s+/' "${file}" 2>/dev/null; then
     matches=$(grep -nE 'rm\s+-[rf]{1,2}\s+/' "${file}" 2>/dev/null || true)
