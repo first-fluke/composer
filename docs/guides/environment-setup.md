@@ -49,10 +49,11 @@ Edit `.env` with real values:
 
 ```bash
 # Linear issue tracker
-LINEAR_API_KEY=lin_api_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx    # Linear Personal API Key
+LINEAR_API_KEY=lin_api_YOUR_KEY_HERE    # Linear Personal API Key
 LINEAR_TEAM_ID=ACR                                          # Your team identifier
 LINEAR_TEAM_UUID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx      # Team UUID
 LINEAR_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxx                # Webhook signing secret
+LINEAR_WORKFLOW_STATE_TODO=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 LINEAR_WORKFLOW_STATE_IN_PROGRESS=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 LINEAR_WORKFLOW_STATE_DONE=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 LINEAR_WORKFLOW_STATE_CANCELLED=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
@@ -92,7 +93,7 @@ curl -s -X POST https://api.linear.app/graphql \
   -d '{"query":"{ workflowStates { nodes { id name type } } }"}' | jq .
 ```
 
-Look for states with `type: "started"` (In Progress), `type: "completed"` (Done), `type: "cancelled"` (Cancelled).
+Look for states with `type: "unstarted"` (Todo), `type: "started"` (In Progress), `type: "completed"` (Done), `type: "cancelled"` (Cancelled).
 
 ---
 
@@ -100,15 +101,15 @@ Look for states with `type: "started"` (In Progress), `type: "completed"` (Done)
 
 1. Go to Linear → Settings → API → Webhooks
 2. Create a new webhook:
-   - **URL:** `https://your-orchestrator-host:8080/webhook`
+   - **URL:** `https://your-orchestrator-host:9741/webhook`
    - **Events:** Issue updates
 3. Copy the **signing secret** → set as `LINEAR_WEBHOOK_SECRET` in `.env`
 
 For local development, expose your local server via tunnel:
 ```bash
-npx localtunnel --port 8080
+npx localtunnel --port 9741
 # or
-cloudflared tunnel --url http://localhost:8080
+cloudflared tunnel --url http://localhost:9741
 ```
 
 ---

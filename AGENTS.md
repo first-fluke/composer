@@ -39,6 +39,7 @@ The install script auto-detects project state and branches into new/existing mod
 | `LINEAR_TEAM_ID` | Linear team identifier (e.g. `ACR`) |
 | `LINEAR_TEAM_UUID` | Linear team UUID |
 | `LINEAR_WEBHOOK_SECRET` | Linear webhook signing secret |
+| `LINEAR_WORKFLOW_STATE_TODO` | "Todo" state ID |
 | `LINEAR_WORKFLOW_STATE_IN_PROGRESS` | "In Progress" state ID |
 | `LINEAR_WORKFLOW_STATE_DONE` | "Done" state ID |
 | `LINEAR_WORKFLOW_STATE_CANCELLED` | "Cancelled" state ID |
@@ -68,7 +69,7 @@ Symphony SPEC — 7 components:
 
 **Dependency direction:** see `docs/architecture/LAYERS.md`
 
-**Boundary principle:** Symphony is a scheduler/runner. Agents change ticket state. Symphony never writes issue state directly.
+**Boundary principle:** Symphony is a scheduler/runner. It manages lifecycle state transitions (Todo→InProgress→Done/Cancelled). Agents focus on business logic (code writing, PR creation).
 
 **Component details:** see `docs/specs/`
 

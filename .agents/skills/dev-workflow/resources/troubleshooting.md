@@ -31,7 +31,7 @@ mise list
 # Check ports
 lsof -ti:8000  # API port
 lsof -ti:3000  # Web port
-lsof -ti:8080  # Mobile port
+lsof -ti:9741  # Orchestrator port
 
 # Kill processes
 lsof -ti:8000 | xargs kill -9

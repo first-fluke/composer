@@ -1,48 +1,62 @@
 {
-  "name": "Symphony Orchestrator — Full Implementation",
-  "status": "approved",
-  "created": "2026-03-17",
+  "name": "Linear Issue Lifecycle — Todo→InProgress→Done 전체 플로우",
+  "status": "in_progress",
+  "created": "2026-03-19",
   "stack": "TypeScript + Bun",
-  "design_doc": "docs/plans/agent-session-abstraction.md",
+  "context": "Symphony가 Todo 이슈를 자동 픽업하고, 에이전트 완료 후 Done 전환 + 작업 요약 코멘트를 작성하는 전체 라이프사이클 구현",
   "waves": {
     "wave1": {
+      "title": "Config + .env + Linear Client 확장",
       "parallel": true,
       "tasks": [
-        { "id": "T1", "title": "domain/models.ts", "file": "src/domain/models.ts", "status": "pending" },
-        { "id": "T2", "title": "observability/logger.ts", "file": "src/observability/logger.ts", "status": "pending" },
-        { "id": "T3", "title": "config/config.ts", "file": "src/config/config.ts", "status": "pending" }
+        {
+          "id": "T1",
+          "title": "Config에 todo state 추가",
+          "files": ["src/config/config.ts", ".env", ".env.example"],
+          "status": "pending"
+        },
+        {
+          "id": "T2",
+          "title": "Linear Client mutation 함수 추가 (updateIssueState, addIssueComment, fetchIssuesByState, linearGraphQL 헬퍼)",
+          "files": ["src/tracker/linear-client.ts", "src/tracker/types.ts"],
+          "status": "pending"
+        },
+        {
+          "id": "T3",
+          "title": "WORKFLOW.md에 Step 4: Deliver 추가 + front matter에 todo 추가",
+          "files": ["WORKFLOW.md"],
+          "status": "pending"
+        }
       ]
     },
     "wave2": {
-      "parallel": true,
+      "title": "Orchestrator 핵심 로직",
+      "parallel": false,
       "depends_on": ["wave1"],
       "tasks": [
-        { "id": "T4", "title": "config/workflow-loader.ts", "file": "src/config/workflow-loader.ts", "status": "pending" },
-        { "id": "T5", "title": "tracker/ (types + webhook + linear client)", "files": ["src/tracker/types.ts", "src/tracker/webhook-handler.ts", "src/tracker/linear-client.ts"], "status": "pending" },
-        { "id": "T6", "title": "workspace/workspace-manager.ts", "file": "src/workspace/workspace-manager.ts", "status": "pending" }
+        {
+          "id": "T4",
+          "title": "Orchestrator: handleIssueTodo, Done 전환, 코멘트, Cancelled 처리",
+          "files": ["src/orchestrator/orchestrator.ts"],
+          "status": "pending"
+        },
+        {
+          "id": "T5",
+          "title": "Retry Queue: 실제 재처리 구현 (이슈 재조회 + 재실행)",
+          "files": ["src/orchestrator/orchestrator.ts"],
+          "status": "pending"
+        }
       ]
     },
     "wave3": {
-      "parallel": true,
+      "title": "검증",
       "depends_on": ["wave2"],
       "tasks": [
-        { "id": "T7", "title": "orchestrator/retry-queue.ts", "file": "src/orchestrator/retry-queue.ts", "status": "pending" },
-        { "id": "T8", "title": "orchestrator/agent-runner.ts", "file": "src/orchestrator/agent-runner.ts", "status": "pending" },
-        { "id": "T9", "title": "server/http-server.ts", "file": "src/server/http-server.ts", "status": "pending" }
-      ]
-    },
-    "wave4": {
-      "parallel": false,
-      "depends_on": ["wave3"],
-      "tasks": [
-        { "id": "T10", "title": "orchestrator/orchestrator.ts", "file": "src/orchestrator/orchestrator.ts", "status": "pending" },
-        { "id": "T11", "title": "main.ts (entry point)", "file": "src/main.ts", "status": "pending" }
-      ]
-    },
-    "wave5": {
-      "depends_on": ["wave4"],
-      "tasks": [
-        { "id": "T12", "title": "E2E test", "status": "pending" }
+        {
+          "id": "T6",
+          "title": "타입 체크 + validate.sh + E2E 테스트",
+          "status": "pending"
+        }
       ]
     }
   }

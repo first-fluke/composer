@@ -24,6 +24,11 @@ tracker:
   url: https://api.linear.app/graphql
   apiKey: $LINEAR_API_KEY
   teamId: $LINEAR_TEAM_ID
+  workflow_states:
+    todo: $LINEAR_WORKFLOW_STATE_TODO
+    in_progress: $LINEAR_WORKFLOW_STATE_IN_PROGRESS
+    done: $LINEAR_WORKFLOW_STATE_DONE
+    cancelled: $LINEAR_WORKFLOW_STATE_CANCELLED
 
 workspace:
   rootPath: $WORKSPACE_ROOT
@@ -37,7 +42,7 @@ concurrency:
   maxParallel: 3
 
 server:
-  port: 8080
+  port: 9741
 ---
 ```
 

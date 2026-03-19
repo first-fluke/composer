@@ -38,7 +38,7 @@ cp .env.example .env
 # 3. Start the orchestrator
 bun run src/main.ts
 
-# Orchestrator listens on :8080
+# Orchestrator listens on :9741 (configurable via SERVER_PORT)
 # POST /webhook  — Linear webhook receiver
 # GET  /status   — Runtime state
 # GET  /health   — Health check

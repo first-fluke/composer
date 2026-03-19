@@ -30,14 +30,12 @@ On startup, it performs a one-time sync to recover any events missed while offli
 ### Startup Sync
 
 ```
-1. TrackerClient.fetchInProgressIssues()   ← one-time API call
-   → current IN_PROGRESS issue list
+1. TrackerClient.fetchIssuesByState([todo, inProgress])   ← one-time API call
+   → current Todo + In Progress issue list
 
 2. For each issue:
-   a. Check if Workspace exists
-      → if not, WorkspaceManager.create(issue)
-   b. Check if prior RunAttempt exists with no LiveSession
-      → if so, assume process terminated → add to retry queue
+   a. If Todo → handleIssueTodo (transition to InProgress, then start agent)
+   b. If InProgress → handleIssueInProgress (start agent directly)
 
 3. Process retry queue (see Retry Queue section)
 
@@ -60,14 +58,22 @@ POST /webhook received:
      → extract: action, issueId, stateId
 
   3. Route by event:
-     a. Issue moved to IN_PROGRESS:
-        → Check if already in activeWorkspaces (skip if duplicate)
-        → Check concurrency limit (queue if maxParallel reached)
-        → WorkspaceManager.create(issue) if no workspace
-        → AgentRunner.spawn(issue, workspace)
-        → Add to activeWorkspaces
+     a. Issue moved to TODO:
+        → handleIssueTodo:
+          - Check if already in activeWorkspaces (skip if duplicate)
+          - Check concurrency limit (queue in retryQueue if maxParallel reached)
+          - TrackerClient.updateIssueState(issueId, inProgress)
+          - Delegate to handleIssueInProgress
 
-     b. Issue moved OUT of IN_PROGRESS (DONE, CANCELLED, etc.):
+     b. Issue moved to IN_PROGRESS:
+        → handleIssueInProgress:
+          - Check if already in activeWorkspaces (skip if duplicate)
+          - Check concurrency limit (queue if maxParallel reached)
+          - WorkspaceManager.create(issue) if no workspace
+          - AgentRunner.spawn(issue, workspace)
+          - Add to activeWorkspaces
+
+     c. Issue moved OUT of IN_PROGRESS (DONE, CANCELLED, etc.):
         → If running in activeWorkspaces, AgentRunner.kill(attemptId)
         → Remove from activeWorkspaces
         → WorkspaceManager.cleanup(workspace) if configured
@@ -79,8 +85,16 @@ POST /webhook received:
 
 ```
 AgentRunner.spawn() resolves:
-  → exitCode == 0: Workspace.status = "done", remove from activeWorkspaces
-  → exitCode != 0: add RetryEntry to retry queue
+  → exitCode == 0:
+    - Workspace.status = "done", remove from activeWorkspaces
+    - TrackerClient.addIssueComment(issueId, workSummary)  ← best-effort
+    - TrackerClient.updateIssueState(issueId, done)
+
+  → exitCode != 0 (recoverable):
+    - Add RetryEntry to retry queue
+    - If max retries exceeded:
+      - TrackerClient.addIssueComment(issueId, errorReport)
+      - TrackerClient.updateIssueState(issueId, cancelled)
 ```
 
 ---
@@ -91,9 +105,9 @@ On restart, in-memory state is reset. A one-time Linear API call restores state.
 
 ```
 1. Initialize: activeWorkspaces = {}, retryQueue = []
-2. Startup sync: fetch IN_PROGRESS issues from Linear (one-time)
-3. For each issue, check existing workspace via WorkspaceManager
-   → exists: reuse, does not exist: create
+2. Startup sync: fetch Todo + In Progress issues from Linear (one-time)
+3. Todo → transition to InProgress, then start agent
+   InProgress → start agent directly
 4. If prior RunAttempt exists with no LiveSession:
    → process terminated while Orchestrator was down → add to retry queue
 5. Start HTTP server, ready for webhook events
@@ -157,7 +171,7 @@ Verify Symphony SPEC Section 18.1 compliance during implementation.
 | 18.1.7 | Restart recovery | Startup sync restores state from Linear + existing workspaces |
 | 18.1.8 | Timeout enforced | Force-kill runner when `agent.timeout` is exceeded |
 | 18.1.9 | Max retries enforced | Stop retrying after `retryPolicy.maxAttempts` |
-| 18.1.10 | No state writes | Orchestrator never changes Linear issue state |
+| 18.1.10 | Scheduling state writes | Orchestrator manages Todo→InProgress, InProgress→Done/Cancelled transitions |
 | 18.1.11 | Structured logging | All events logged per `observability.md` format |
 | 18.1.12 | Graceful shutdown | On SIGTERM, complete current RunAttempts before exit |
 | 18.1.13 | Config change reload | Detect WORKFLOW.md changes, finish current runs, then reload |

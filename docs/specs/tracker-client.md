@@ -82,6 +82,8 @@ parseWebhookEvent(payload) → WebhookEvent {
 }
 
 Orchestrator routes by:
+  stateId == Config.workflowStates.todo
+    → issue moved TO Todo → transition to In Progress, start agent
   stateId == Config.workflowStates.inProgress
     → issue moved TO In Progress → start agent
   prevStateId == Config.workflowStates.inProgress && stateId != inProgress
@@ -90,16 +92,16 @@ Orchestrator routes by:
 
 ---
 
-## Startup Sync Query — IN_PROGRESS Issues
+## Startup Sync Query — Todo + In Progress Issues
 
-On Orchestrator startup, fetch all current IN_PROGRESS issues once to recover missed events.
+On Orchestrator startup, fetch all current Todo and In Progress issues to recover missed events.
 
 ```graphql
-query GetInProgressIssues($teamId: String!, $stateId: ID!) {
+query GetIssuesByState($teamId: String!, $stateIds: [ID!]!) {
   issues(
     filter: {
       team: { id: { eq: $teamId } }
-      state: { id: { eq: $stateId } }
+      state: { id: { in: $stateIds } }
     }
     first: 50
   ) {
@@ -127,7 +129,7 @@ query GetInProgressIssues($teamId: String!, $stateId: ID!) {
 ```json
 {
   "teamId": "{LINEAR_TEAM_UUID}",
-  "stateId": "{LINEAR_WORKFLOW_STATE_IN_PROGRESS}"
+  "stateIds": ["{LINEAR_WORKFLOW_STATE_TODO}", "{LINEAR_WORKFLOW_STATE_IN_PROGRESS}"]
 }
 ```
 
@@ -137,11 +139,9 @@ Convert returned nodes to the `Issue` domain model from `domain-models.md`.
 
 ## Workflow State IDs
 
-Symphony references these IDs in **read-only** mode.
-Actual state changes are performed by agents calling the Linear API directly.
-
 | State | ID | Description |
 |---|---|---|
+| TODO | `{LINEAR_WORKFLOW_STATE_TODO}` | Issue ready for pickup |
 | IN_PROGRESS | `{LINEAR_WORKFLOW_STATE_IN_PROGRESS}` | Agent is running |
 | DONE | `{LINEAR_WORKFLOW_STATE_DONE}` | Agent completed successfully |
 | CANCELLED | `{LINEAR_WORKFLOW_STATE_CANCELLED}` | Agent failed or cancelled |
@@ -149,12 +149,13 @@ Actual state changes are performed by agents calling the Linear API directly.
 **State transition authority:**
 
 ```
-Agent start    → IN_PROGRESS  (agent sets this)
-Agent success  → DONE         (agent sets this)
-Agent failure  → CANCELLED    (agent sets this)
+Todo → In Progress  (Orchestrator — work acceptance)
+In Progress → Done  (Orchestrator — on agent completion + summary comment)
+In Progress → Cancelled  (Orchestrator — on max retries exceeded + error comment)
 ```
 
-Symphony (Orchestrator) never changes issue state directly.
+Orchestrator manages scheduling-related state transitions (Todo→InProgress, InProgress→Done/Cancelled).
+Agents focus on business logic (code writing, PR creation).
 
 ---
 
@@ -213,6 +214,34 @@ Other → log and skip (webhook events will continue arriving).
 
 ---
 
+## Mutations
+
+### updateIssueState
+
+```graphql
+mutation UpdateIssueState($issueId: String!, $stateId: String!) {
+  issueUpdate(id: $issueId, input: { stateId: $stateId }) {
+    success
+  }
+}
+```
+
+Used by Orchestrator for Todo→InProgress, InProgress→Done, and InProgress→Cancelled transitions.
+
+### addIssueComment
+
+```graphql
+mutation AddIssueComment($issueId: String!, $body: String!) {
+  commentCreate(input: { issueId: $issueId, body: $body }) {
+    success
+  }
+}
+```
+
+Used for posting work summary on completion and error reports on failure.
+
+---
+
 ## Interface Summary
 
 ```
@@ -223,9 +252,14 @@ TrackerClient {
   parseWebhookEvent(payload: string) → WebhookEvent
   // Parse webhook JSON into domain event. Throw on invalid format.
 
-  fetchInProgressIssues() → Issue[]
-  // One-time startup sync. Fetch all IN_PROGRESS issues.
-  // Throw on error (caller handles).
+  fetchIssuesByState(stateIds: string[]) → Issue[]
+  // Startup sync. Fetch issues in the given states (Todo + In Progress).
+
+  updateIssueState(issueId: string, stateId: string) → void
+  // Transition issue to a new workflow state.
+
+  addIssueComment(issueId: string, body: string) → void
+  // Post a comment on an issue (work summary or error report).
 }
 ```
 

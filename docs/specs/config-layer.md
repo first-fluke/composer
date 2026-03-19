@@ -66,9 +66,10 @@ Config {
     maxParallel : number   // Max concurrent agent count
   }
   server: {
-    port : number   // HTTP server port for webhooks + status (default: 8080)
+    port : number   // HTTP server port for webhooks + status (default: 9741)
   }
   workflowStates: {
+    todo       : string   // Linear "Todo" state UUID ($LINEAR_WORKFLOW_STATE_TODO)
     inProgress : string   // Linear "In Progress" state UUID ($LINEAR_WORKFLOW_STATE_IN_PROGRESS)
     done       : string   // Linear "Done" state UUID ($LINEAR_WORKFLOW_STATE_DONE)
     cancelled  : string   // Linear "Cancelled" state UUID ($LINEAR_WORKFLOW_STATE_CANCELLED)
@@ -89,6 +90,7 @@ Refuse to start if any of the following are missing or empty.
 | `tracker.teamUuid` | `LINEAR_TEAM_UUID` | Linear team UUID |
 | `tracker.webhookSecret` | `LINEAR_WEBHOOK_SECRET` | Linear webhook signing secret |
 | `workspace.rootPath` | `WORKSPACE_ROOT` | Workspace root absolute path |
+| `workflowStates.todo` | `LINEAR_WORKFLOW_STATE_TODO` | "Todo" state UUID |
 | `workflowStates.inProgress` | `LINEAR_WORKFLOW_STATE_IN_PROGRESS` | "In Progress" state UUID |
 | `workflowStates.done` | `LINEAR_WORKFLOW_STATE_DONE` | "Done" state UUID |
 | `workflowStates.cancelled` | `LINEAR_WORKFLOW_STATE_CANCELLED` | "Cancelled" state UUID |
@@ -132,6 +134,7 @@ See `.env.example`. Key items:
 | `LINEAR_TEAM_ID` | Y | — | Linear team identifier (e.g. `ACR`) |
 | `LINEAR_TEAM_UUID` | Y | — | Linear team UUID |
 | `LINEAR_WEBHOOK_SECRET` | Y | — | Linear webhook signing secret |
+| `LINEAR_WORKFLOW_STATE_TODO` | Y | — | "Todo" state UUID |
 | `LINEAR_WORKFLOW_STATE_IN_PROGRESS` | Y | — | "In Progress" state UUID |
 | `LINEAR_WORKFLOW_STATE_DONE` | Y | — | "Done" state UUID |
 | `LINEAR_WORKFLOW_STATE_CANCELLED` | Y | — | "Cancelled" state UUID |

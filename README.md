@@ -19,10 +19,12 @@ The orchestrator is built with **TypeScript + Bun** (zero external dependencies 
 ## Core Concept
 
 ```
-Linear Issue (In Progress)
+Linear Issue (Todo)
         │
         ▼
   Orchestrator  ──webhook──▶  Linear Webhook Events
+        │
+        ├─ Todo → In Progress (Orchestrator transitions via Linear API)
         │
         ▼  (per issue)
   WorkspaceManager  ──creates──▶  git worktree  {WORKSPACE_ROOT}/{issue-key}/
@@ -34,10 +36,13 @@ Linear Issue (In Progress)
   Agent works in isolated worktree, commits, opens PR
         │
         ▼
+  Orchestrator posts work summary → transitions to Done
+        │
+        ▼
   CI passes  →  human reviews architecture only  →  merge  →  worktree GC
 ```
 
-**Key principle:** Symphony is a scheduler/runner. It never writes to Linear. Agents do.
+**Key principle:** Symphony is a scheduler/runner. It manages lifecycle state transitions (Todo→InProgress→Done/Cancelled) and agents focus on business logic (code writing, PR creation).
 
 ---
 
@@ -125,10 +130,10 @@ git clone https://github.com/first-fluke/composer.git my-project
 cd my-project
 bun install
 cp .env.example .env   # Fill in LINEAR_API_KEY, LINEAR_WEBHOOK_SECRET, etc.
-bun run src/main.ts    # Orchestrator starts on :8080
+bun run src/main.ts    # Orchestrator starts on :9741 (configurable via SERVER_PORT)
 ```
 
-Then set up a Linear webhook pointing to `https://your-host:8080/webhook`, and move an issue to "In Progress" — Symphony handles the rest.
+Then set up a Linear webhook pointing to `https://your-host:9741/webhook`, and create a "Todo" issue — Symphony picks it up, transitions to In Progress, runs an agent, and marks Done automatically.
 
 ---
 
@@ -161,7 +166,7 @@ cp .env.example .env
 bun run src/main.ts
 ```
 
-The orchestrator starts on `:8080` and listens for Linear webhooks. See [`docs/guides/environment-setup.md`](docs/guides/environment-setup.md) for detailed Linear webhook setup.
+The orchestrator starts on `:9741` and listens for Linear webhooks. See [`docs/guides/environment-setup.md`](docs/guides/environment-setup.md) for detailed Linear webhook setup.
 
 ### Existing project
 
@@ -197,9 +202,10 @@ cp .env.example .env
 Required values:
 
 ```bash
-LINEAR_API_KEY=lin_api_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+LINEAR_API_KEY=lin_api_YOUR_KEY_HERE
 LINEAR_TEAM_ID=ACR
 LINEAR_TEAM_UUID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+LINEAR_WORKFLOW_STATE_TODO=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 LINEAR_WORKFLOW_STATE_IN_PROGRESS=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 LINEAR_WORKFLOW_STATE_DONE=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 LINEAR_WORKFLOW_STATE_CANCELLED=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
@@ -249,7 +255,7 @@ Or use the built-in Claude Code skill:
 |---|---|---|---|
 | 1 | **Workflow Loader** | Parse `WORKFLOW.md` — YAML front matter + prompt body | `docs/specs/workflow-loader.md` |
 | 2 | **Config Layer** | Typed config object + `$VAR` environment variable resolution | `docs/specs/config-layer.md` |
-| 3 | **Issue Tracker Client** | Linear GraphQL adapter — fetch in-progress issues | `docs/specs/tracker-client.md` |
+| 3 | **Issue Tracker Client** | Linear GraphQL adapter — fetch issues, state transitions, comments | `docs/specs/tracker-client.md` |
 | 4 | **Orchestrator** | Webhook event handler, state machine, retry queue, single in-memory state authority | `docs/specs/orchestrator.md` |
 | 5 | **Workspace Manager** | Per-issue `git worktree` creation, lifecycle hooks, GC | `docs/specs/workspace-manager.md` |
 | 6 | **Agent Runner** | Spawn agent via AgentSession abstraction (claude/gemini/codex), timeout enforcement | `docs/specs/agent-runner.md` |
@@ -367,6 +373,7 @@ tracker:
   team_id: $LINEAR_TEAM_ID
   webhook_secret: $LINEAR_WEBHOOK_SECRET
   workflow_states:
+    todo: $LINEAR_WORKFLOW_STATE_TODO
     in_progress: $LINEAR_WORKFLOW_STATE_IN_PROGRESS
     done: $LINEAR_WORKFLOW_STATE_DONE
     cancelled: $LINEAR_WORKFLOW_STATE_CANCELLED
