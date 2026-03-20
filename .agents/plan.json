@@ -1,62 +1,66 @@
 {
-  "name": "Linear Issue Lifecycle — Todo→InProgress→Done 전체 플로우",
+  "name": "Comprehensive Bug Fix & Quality Improvement",
   "status": "in_progress",
-  "created": "2026-03-19",
+  "created": "2026-03-20",
   "stack": "TypeScript + Bun",
-  "context": "Symphony가 Todo 이슈를 자동 픽업하고, 에이전트 완료 후 Done 전환 + 작업 요약 코멘트를 작성하는 전체 라이프사이클 구현",
-  "waves": {
-    "wave1": {
-      "title": "Config + .env + Linear Client 확장",
-      "parallel": true,
+  "context": "5-agent 종합 리뷰 결과 CRITICAL 5건, HIGH 8건, MEDIUM 10건 수정. 테스트 0% → 핵심 모듈 테스트 커버리지 확보",
+  "streams": {
+    "A": {
+      "title": "Security + HTTP Server",
+      "files": ["src/config/workflow-loader.ts", "src/server/http-server.ts"],
       "tasks": [
-        {
-          "id": "T1",
-          "title": "Config에 todo state 추가",
-          "files": ["src/config/config.ts", ".env", ".env.example"],
-          "status": "pending"
-        },
-        {
-          "id": "T2",
-          "title": "Linear Client mutation 함수 추가 (updateIssueState, addIssueComment, fetchIssuesByState, linearGraphQL 헬퍼)",
-          "files": ["src/tracker/linear-client.ts", "src/tracker/types.ts"],
-          "status": "pending"
-        },
-        {
-          "id": "T3",
-          "title": "WORKFLOW.md에 Step 4: Deliver 추가 + front matter에 todo 추가",
-          "files": ["WORKFLOW.md"],
-          "status": "pending"
-        }
+        "CRITICAL: sanitizeIssueBody 추가 (prompt injection 차단)",
+        "HIGH: request body size limit (1MB)",
+        "HIGH: global error handler",
+        "MEDIUM: Content-Type validation",
+        "MEDIUM: 404 JSON 응답 일관성"
       ]
     },
-    "wave2": {
-      "title": "Orchestrator 핵심 로직",
-      "parallel": false,
-      "depends_on": ["wave1"],
+    "B": {
+      "title": "Orchestrator Architecture + State Machine",
+      "files": ["src/orchestrator/orchestrator.ts", "src/main.ts"],
       "tasks": [
-        {
-          "id": "T4",
-          "title": "Orchestrator: handleIssueTodo, Done 전환, 코멘트, Cancelled 처리",
-          "files": ["src/orchestrator/orchestrator.ts"],
-          "status": "pending"
-        },
-        {
-          "id": "T5",
-          "title": "Retry Queue: 실제 재처리 구현 (이슈 재조회 + 재실행)",
-          "files": ["src/orchestrator/orchestrator.ts"],
-          "status": "pending"
-        }
+        "CRITICAL: 레이어 위반 해소 (startHttpServer를 main.ts로 이동)",
+        "CRITICAL: TOCTOU race condition 수정 (processing lock)",
+        "CRITICAL: handleIssueLeftInProgress에서 agent kill 추가",
+        "HIGH: N+1 API 호출 수정 (processRetryQueue 배치화)",
+        "MEDIUM: SRP — handleIssueInProgress 책임 분리",
+        "MEDIUM: DRY — 중복 concurrency guard 추출"
       ]
     },
-    "wave3": {
-      "title": "검증",
-      "depends_on": ["wave2"],
+    "C": {
+      "title": "Agent Runner + Sessions",
+      "files": ["src/orchestrator/agent-runner.ts", "src/sessions/session-factory.ts", "src/sessions/base-session.ts", "src/sessions/claude-session.ts", "src/sessions/codex-session.ts", "src/sessions/gemini-session.ts", "src/sessions/index.ts"],
       "tasks": [
-        {
-          "id": "T6",
-          "title": "타입 체크 + validate.sh + E2E 테스트",
-          "status": "pending"
-        }
+        "HIGH: setTimeout 메모리 누수 수정 (타이머 저장/해제)",
+        "HIGH: event listener 정리 (complete/error 한번만)",
+        "HIGH: module-level mutable state 제거 (registry, sessionsRegistered, acpSupportCache)",
+        "MEDIUM: gemini temp file read-back 로직 수정",
+        "LOW: temp file name collision (crypto.randomUUID)",
+        "LOW: claude shell pipe → stdin 직접 전달",
+        "LOW: deprecated fetchInProgressIssues 제거"
+      ]
+    },
+    "D": {
+      "title": "Config + Tracker + RetryQueue",
+      "files": ["src/config/config.ts", "src/tracker/linear-client.ts", "src/tracker/webhook-handler.ts", "src/tracker/types.ts", "src/orchestrator/retry-queue.ts"],
+      "tasks": [
+        "HIGH: API 응답 런타임 검증 (Zod)",
+        "HIGH: Pagination cursor 구현",
+        "MEDIUM: config 하드코딩 값 env var 연동",
+        "MEDIUM: error message Fix 지침 보완",
+        "MEDIUM: agentType enum 제약",
+        "MEDIUM: retry queue 중복 방지",
+        "MEDIUM: webhook handler Zod 검증"
+      ]
+    },
+    "E": {
+      "title": "Unit + Integration Tests",
+      "files": ["src/__tests__/"],
+      "tasks": [
+        "P0: config.test.ts, webhook-handler.test.ts, retry-queue.test.ts",
+        "P1: workflow-loader.test.ts, linear-client.test.ts, session-factory.test.ts",
+        "P2: http-server.test.ts, agent-runner.test.ts"
       ]
     }
   }
