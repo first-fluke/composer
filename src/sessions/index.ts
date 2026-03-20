@@ -15,6 +15,8 @@ export { ClaudeSession } from "./claude-session"
 export { GeminiSession } from "./gemini-session"
 
 export {
+  SessionRegistry,
+  defaultRegistry,
   createSession,
   registerSession,
   listSessionTypes,

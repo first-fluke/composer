@@ -48,24 +48,18 @@ export class ClaudeSession extends BaseSession {
       args.push("--effort", effort)
     }
 
-    // Write prompt to temp file to avoid arg length/injection issues
-    const promptFile = `/tmp/symphony-claude-${Date.now()}.txt`
-    await Bun.write(promptFile, prompt)
-
-    this.process = Bun.spawn(
-      ["sh", "-c", `cat "${promptFile}" | claude ${args.join(" ")}`],
-      {
-        cwd: this.config.workspacePath,
-        env: buildAgentEnv("claude", this.config.env),
-        stdout: "pipe",
-        stderr: "pipe",
-      },
-    )
-
-    // Cleanup prompt file after process starts
-    import("node:fs/promises").then(fs => {
-      setTimeout(() => fs.unlink(promptFile).catch(() => {}), 5000)
+    // Pass prompt via stdin to avoid arg length/injection issues
+    this.process = Bun.spawn(["claude", ...args], {
+      cwd: this.config.workspacePath,
+      env: buildAgentEnv("claude", this.config.env),
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
     })
+
+    const sink = this.process.stdin as import("bun").FileSink
+    sink.write(prompt)
+    sink.end()
 
     await this.readStream()
   }

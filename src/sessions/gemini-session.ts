@@ -10,13 +10,12 @@
 import { BaseSession, buildAgentEnv } from "./base-session"
 import type { AgentConfig } from "./agent-session"
 
-let acpSupportCache: boolean | null = null
-
 export class GeminiSession extends BaseSession {
   private output = ""
   private filesChanged: string[] = []
   private useAcp = false
   private started = false
+  private acpSupportCache: boolean | null = null
 
   async start(config: AgentConfig): Promise<void> {
     this.config = config
@@ -85,26 +84,21 @@ export class GeminiSession extends BaseSession {
   private async runOneShotWithPrompt(prompt: string): Promise<void> {
     this.startedAt = Date.now()
 
-    // Write prompt to temp file to avoid CLI arg injection
-    const promptFile = `/tmp/symphony-gemini-${Date.now()}.txt`
-    await Bun.write(promptFile, prompt)
-    const promptText = await Bun.file(promptFile).text()
-
     const config = this.config!
     const args = this.buildFallbackArgs(config)
-    args.push("--prompt", promptText)
 
-    // Cleanup temp file
-    import("node:fs/promises").then(fs => {
-      setTimeout(() => fs.unlink(promptFile).catch(() => {}), 5000)
-    })
-
+    // Pass prompt via stdin to avoid CLI arg injection and temp file issues
     this.process = Bun.spawn(["gemini", ...args], {
       cwd: config.workspacePath,
       env: buildAgentEnv("gemini", config.env),
+      stdin: "pipe",
       stdout: "pipe",
       stderr: "ignore",  // gemini outputs heavy MCP noise to stderr — ignore to prevent pipe blocking
     })
+
+    const sink = this.process.stdin as import("bun").FileSink
+    sink.write(prompt)
+    sink.end()
 
     try {
       await this.readFallbackOutput()
@@ -234,15 +228,15 @@ export class GeminiSession extends BaseSession {
     }
   }
 
-  // ── ACP detection (cached) ──────────────────────────────────────────────
+  // ── ACP detection (cached per instance) ───────────────────────────────
 
   private async detectAcpSupport(): Promise<boolean> {
-    if (acpSupportCache !== null) return acpSupportCache
+    if (this.acpSupportCache !== null) return this.acpSupportCache
 
     // ACP is experimental and not reliably detectable via --help (always exits 0).
     // Disable ACP by default until Gemini CLI stabilizes ACP support.
     // Users can opt in via config.options.useAcp = true.
-    acpSupportCache = false
-    return acpSupportCache
+    this.acpSupportCache = false
+    return this.acpSupportCache
   }
 }

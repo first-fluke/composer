@@ -8,8 +8,6 @@ import { createSession, registerBuiltinSessions } from "../sessions/session-fact
 import type { AgentSession } from "../sessions/agent-session"
 import { logger } from "../observability/logger"
 
-let sessionsRegistered = false
-
 export interface RunOptions {
   agentType: string
   model?: string
@@ -27,11 +25,13 @@ export interface RunCallbacks {
 
 export class AgentRunnerService {
   private activeSessions = new Map<string, AgentSession>()
+  private activeTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private sessionsRegistered = false
 
   async ensureRegistered(): Promise<void> {
-    if (!sessionsRegistered) {
+    if (!this.sessionsRegistered) {
       await registerBuiltinSessions()
-      sessionsRegistered = true
+      this.sessionsRegistered = true
     }
   }
 
@@ -45,24 +45,44 @@ export class AgentRunnerService {
     const session = createSession(options.agentType)
     this.activeSessions.set(attempt.id, session)
 
-    // Wire up events
-    session.on("heartbeat", (e) => callbacks.onHeartbeat(e.timestamp))
+    // Guard against double-handling of complete/error events
+    let handled = false
 
-    session.on("complete", (e) => {
+    const cleanup = () => {
+      const timer = this.activeTimers.get(attempt.id)
+      if (timer) clearTimeout(timer)
+      this.activeTimers.delete(attempt.id)
+      this.activeSessions.delete(attempt.id)
+      session.off("complete", onComplete)
+      session.off("error", onError)
+    }
+
+    const onComplete = (e: Extract<AgentEvent, { type: "complete" }>) => {
+      if (handled) return
+      handled = true
+
       const completed: RunAttempt = {
         ...attempt,
         finishedAt: new Date().toISOString(),
         exitCode: e.result.exitCode,
         agentOutput: e.result.output,
       }
-      this.activeSessions.delete(attempt.id)
+      cleanup()
       callbacks.onComplete(completed)
-    })
+    }
 
-    session.on("error", (e) => {
-      this.activeSessions.delete(attempt.id)
+    const onError = (e: Extract<AgentEvent, { type: "error" }>) => {
+      if (handled) return
+      handled = true
+
+      cleanup()
       callbacks.onError(e.error)
-    })
+    }
+
+    // Wire up events
+    session.on("heartbeat", (e) => callbacks.onHeartbeat(e.timestamp))
+    session.on("complete", onComplete)
+    session.on("error", onError)
 
     // Start session
     const config: AgentConfig = {
@@ -83,16 +103,19 @@ export class AgentRunnerService {
         workspacePath: options.workspacePath,
       })
     } catch (err) {
-      this.activeSessions.delete(attempt.id)
+      if (handled) return
+      handled = true
+      cleanup()
       callbacks.onError({
         code: "CRASH",
         message: `Failed to start agent: ${err}`,
         recoverable: true,
       })
+      return
     }
 
-    // Timeout watchdog
-    setTimeout(async () => {
+    // Timeout watchdog — stored so it can be cleared on completion
+    const timer = setTimeout(async () => {
       if (this.activeSessions.has(attempt.id)) {
         logger.warn("orchestrator", "Agent timed out", {
           attemptId: attempt.id,
@@ -100,27 +123,41 @@ export class AgentRunnerService {
           durationMs: options.timeout * 1000,
         })
         await this.kill(attempt.id)
-        callbacks.onError({
-          code: "TIMEOUT",
-          message: `Agent timed out after ${options.timeout}s`,
-          recoverable: true,
-        })
+        if (!handled) {
+          handled = true
+          cleanup()
+          callbacks.onError({
+            code: "TIMEOUT",
+            message: `Agent timed out after ${options.timeout}s`,
+            recoverable: true,
+          })
+        }
       }
     }, options.timeout * 1000)
+    this.activeTimers.set(attempt.id, timer)
   }
 
   async kill(attemptId: string): Promise<void> {
     const session = this.activeSessions.get(attemptId)
     if (!session) return
 
+    // Clear timeout watchdog timer
+    const timer = this.activeTimers.get(attemptId)
+    if (timer) clearTimeout(timer)
+    this.activeTimers.delete(attemptId)
+
     await session.cancel()
-    // Give 10 seconds for graceful shutdown
-    setTimeout(async () => {
+    // Give 10 seconds for graceful shutdown, then force-kill
+    const killTimer = setTimeout(async () => {
       if (session.isAlive()) {
         await session.kill()
       }
       await session.dispose()
     }, 10_000)
+    // Prevent the timer from keeping the process alive
+    if (killTimer && typeof killTimer === "object" && "unref" in killTimer) {
+      killTimer.unref()
+    }
 
     this.activeSessions.delete(attemptId)
   }
