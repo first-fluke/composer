@@ -12,15 +12,17 @@ const configSchema = z.object({
   linearWebhookSecret: z.string().min(1, "LINEAR_WEBHOOK_SECRET is not set.\n  Fix: Add LINEAR_WEBHOOK_SECRET=whsec_xxx to .env"),
   workflowStates: z.object({
     todo: z.string().min(1, "LINEAR_WORKFLOW_STATE_TODO is not set.\n  Fix: Add LINEAR_WORKFLOW_STATE_TODO=<uuid> to .env"),
-    inProgress: z.string().min(1, "LINEAR_WORKFLOW_STATE_IN_PROGRESS is not set."),
-    done: z.string().min(1, "LINEAR_WORKFLOW_STATE_DONE is not set."),
-    cancelled: z.string().min(1, "LINEAR_WORKFLOW_STATE_CANCELLED is not set."),
+    inProgress: z.string().min(1, "LINEAR_WORKFLOW_STATE_IN_PROGRESS is not set.\n  Fix: Add LINEAR_WORKFLOW_STATE_IN_PROGRESS=<uuid> to .env"),
+    done: z.string().min(1, "LINEAR_WORKFLOW_STATE_DONE is not set.\n  Fix: Add LINEAR_WORKFLOW_STATE_DONE=<uuid> to .env"),
+    cancelled: z.string().min(1, "LINEAR_WORKFLOW_STATE_CANCELLED is not set.\n  Fix: Add LINEAR_WORKFLOW_STATE_CANCELLED=<uuid> to .env"),
   }),
   workspaceRoot: z.string().min(1, "WORKSPACE_ROOT is not set.").refine(
     (v) => v.startsWith("/"),
     "WORKSPACE_ROOT must be an absolute path.\n  Fix: Set WORKSPACE_ROOT=/absolute/path in .env"
   ),
-  agentType: z.string().min(1, "AGENT_TYPE is not set.\n  Fix: Set AGENT_TYPE=claude in .env"),
+  agentType: z.enum(["claude", "codex", "gemini"], {
+    message: 'AGENT_TYPE must be "claude", "codex", or "gemini".\n  Fix: Set AGENT_TYPE=claude in .env'
+  }),
   agentTimeout: z.number().min(30, "agent timeout must be >= 30 seconds"),
   agentMaxRetries: z.number().min(1),
   agentRetryDelay: z.number().min(1),
@@ -48,10 +50,10 @@ export function loadConfig(): Config {
     },
     workspaceRoot: env.WORKSPACE_ROOT ?? "",
     agentType: env.AGENT_TYPE ?? "claude",
-    agentTimeout: 3600,
-    agentMaxRetries: 3,
-    agentRetryDelay: 60,
-    maxParallel: 3,
+    agentTimeout: Number(env.AGENT_TIMEOUT ?? "3600"),
+    agentMaxRetries: Number(env.AGENT_MAX_RETRIES ?? "3"),
+    agentRetryDelay: Number(env.AGENT_RETRY_DELAY ?? "60"),
+    maxParallel: Number(env.MAX_PARALLEL ?? "3"),
     serverPort: Number(env.SERVER_PORT ?? "9741"),
     logLevel: (env.LOG_LEVEL ?? "info") as "debug" | "info" | "warn" | "error",
     logFormat: (env.LOG_FORMAT ?? "json") as "json" | "text",

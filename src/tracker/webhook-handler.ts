@@ -2,6 +2,7 @@
  * Webhook Handler — Verify Linear webhook signatures and parse payloads.
  */
 
+import { z } from "zod/v4"
 import type { Issue } from "../domain/models"
 import type { WebhookEvent } from "./types"
 import { logger } from "../observability/logger"
@@ -34,46 +35,73 @@ export async function verifyWebhookSignature(
   return diff === 0
 }
 
+// ── Webhook Payload Schema ──────────────────────────────────────────
+
+const webhookPayloadSchema = z.object({
+  action: z.enum(["create", "update", "remove"]),
+  type: z.string(),
+  data: z.object({
+    id: z.string(),
+    identifier: z.string(),
+    title: z.string().optional().default(""),
+    description: z.string().nullable().optional().default(""),
+    url: z.string().optional().default(""),
+    state: z.object({
+      id: z.string(),
+      name: z.string().optional().default(""),
+      type: z.string().optional().default(""),
+    }).optional(),
+    team: z.object({
+      id: z.string().optional().default(""),
+      key: z.string().optional().default(""),
+    }).optional(),
+  }),
+  updatedFrom: z.object({
+    stateId: z.string(),
+  }).optional(),
+})
+
 /**
  * Parse Linear webhook payload into a WebhookEvent.
  */
 export function parseWebhookEvent(payload: string): WebhookEvent | null {
   try {
-    const data = JSON.parse(payload) as Record<string, unknown>
+    const raw = JSON.parse(payload)
+    const result = webhookPayloadSchema.safeParse(raw)
 
-    const action = data.action as string | undefined
-    const type = data.type as string | undefined
-    if (type !== "Issue" || !action) return null
+    if (!result.success) {
+      logger.error("tracker-client", "Webhook payload validation failed", {
+        error: result.error.message,
+      })
+      return null
+    }
 
-    const issueData = data.data as Record<string, unknown> | undefined
-    if (!issueData) return null
+    const data = result.data
 
-    const stateData = issueData.state as Record<string, unknown> | undefined
-    const teamData = issueData.team as Record<string, unknown> | undefined
+    if (data.type !== "Issue") return null
 
     const issue: Issue = {
-      id: issueData.id as string,
-      identifier: issueData.identifier as string,
-      title: (issueData.title as string) ?? "",
-      description: (issueData.description as string) ?? "",
-      url: (issueData.url as string) ?? "",
+      id: data.data.id,
+      identifier: data.data.identifier,
+      title: data.data.title,
+      description: data.data.description ?? "",
+      url: data.data.url,
       status: {
-        id: (stateData?.id as string) ?? "",
-        name: (stateData?.name as string) ?? "",
-        type: (stateData?.type as string) ?? "",
+        id: data.data.state?.id ?? "",
+        name: data.data.state?.name ?? "",
+        type: data.data.state?.type ?? "",
       },
       team: {
-        id: (teamData?.id as string) ?? "",
-        key: (teamData?.key as string) ?? "",
+        id: data.data.team?.id ?? "",
+        key: data.data.team?.key ?? "",
       },
     }
 
-    const updatedFrom = data.updatedFrom as Record<string, unknown> | undefined
-    const prevStateId = (updatedFrom?.stateId as string) ?? null
-    const stateId = stateData?.id as string ?? ""
+    const stateId = data.data.state?.id ?? ""
+    const prevStateId = data.updatedFrom?.stateId ?? null
 
     return {
-      action: action as WebhookEvent["action"],
+      action: data.action,
       issueId: issue.id,
       issue,
       stateId,

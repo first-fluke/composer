@@ -4,6 +4,7 @@
 
 import type { Issue } from "../domain/models"
 import type { LinearGraphQLResponse, LinearTeamIssuesData, LinearMutationData, LinearIssueNode } from "./types"
+import { linearTeamIssuesDataSchema } from "./types"
 import { logger } from "../observability/logger"
 
 const LINEAR_API_URL = "https://api.linear.app/graphql"
@@ -55,18 +56,23 @@ async function linearGraphQL<T>(
 // ── Queries ─────────────────────────────────────────────────────────
 
 const ISSUES_BY_STATE_QUERY = `
-query GetIssuesByState($teamId: String!, $stateIds: [ID!]!) {
+query GetIssuesByState($teamId: String!, $stateIds: [ID!]!, $cursor: String) {
   team(id: $teamId) {
     issues(
       filter: {
         state: { id: { in: $stateIds } }
       }
       first: 50
+      after: $cursor
     ) {
       nodes {
         id identifier title description url
         state { id name type }
         team { id key }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
       }
     }
   }
@@ -78,25 +84,31 @@ export async function fetchIssuesByState(
   teamUuid: string,
   stateIds: string[],
 ): Promise<Issue[]> {
-  const data = await linearGraphQL<LinearTeamIssuesData>(
-    apiKey,
-    ISSUES_BY_STATE_QUERY,
-    { teamId: teamUuid, stateIds },
-  )
+  const allIssues: Issue[] = []
+  let cursor: string | null = null
 
-  const nodes = data?.team?.issues?.nodes ?? []
-  logger.info("tracker-client", `Fetched ${nodes.length} issues for states`, { stateIds: stateIds.join(",") })
+  do {
+    const data = await linearGraphQL<LinearTeamIssuesData>(
+      apiKey,
+      ISSUES_BY_STATE_QUERY,
+      { teamId: teamUuid, stateIds, cursor },
+    )
 
-  return nodes.map(nodeToIssue)
-}
+    const parsed = linearTeamIssuesDataSchema.safeParse(data)
+    if (!parsed.success) {
+      throw new Error(`Linear API response validation failed: ${parsed.error.message}`)
+    }
 
-/** @deprecated Use fetchIssuesByState instead */
-export async function fetchInProgressIssues(
-  apiKey: string,
-  teamUuid: string,
-  inProgressStateId: string,
-): Promise<Issue[]> {
-  return fetchIssuesByState(apiKey, teamUuid, [inProgressStateId])
+    const issues = parsed.data?.team?.issues
+    const nodes = issues?.nodes ?? []
+    allIssues.push(...nodes.map(nodeToIssue))
+
+    cursor = issues?.pageInfo?.hasNextPage ? (issues.pageInfo.endCursor ?? null) : null
+  } while (cursor)
+
+  logger.info("tracker-client", `Fetched ${allIssues.length} issues for states`, { stateIds: stateIds.join(",") })
+
+  return allIssues
 }
 
 // ── Mutations ───────────────────────────────────────────────────────
@@ -156,7 +168,7 @@ function nodeToIssue(node: LinearIssueNode): Issue {
     id: node.id,
     identifier: node.identifier,
     title: node.title,
-    description: node.description,
+    description: node.description ?? "",
     url: node.url,
     status: node.state,
     team: node.team,
