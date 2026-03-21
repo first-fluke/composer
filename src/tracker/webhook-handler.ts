@@ -3,6 +3,7 @@
  */
 
 import { z } from "zod/v4"
+import { parseScoreFromLabels } from "../domain/models"
 import type { Issue } from "../domain/models"
 import type { WebhookEvent } from "./types"
 import { logger } from "../observability/logger"
@@ -55,6 +56,10 @@ const webhookPayloadSchema = z.object({
       id: z.string().optional().default(""),
       key: z.string().optional().default(""),
     }).optional(),
+    labels: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+    })).optional().default([]),
   }),
   updatedFrom: z.object({
     stateId: z.string(),
@@ -95,6 +100,8 @@ export function parseWebhookEvent(payload: string): WebhookEvent | null {
         id: data.data.team?.id ?? "",
         key: data.data.team?.key ?? "",
       },
+      labels: data.data.labels.map((l) => l.name),
+      score: parseScoreFromLabels(data.data.labels.map((l) => l.name)),
     }
 
     const stateId = data.data.state?.id ?? ""

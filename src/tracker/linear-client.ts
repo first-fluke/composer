@@ -2,6 +2,7 @@
  * Linear Client — GraphQL API for issue queries and mutations.
  */
 
+import { parseScoreFromLabels } from "../domain/models"
 import type { Issue } from "../domain/models"
 import type { LinearGraphQLResponse, LinearTeamIssuesData, LinearMutationData, LinearIssueNode } from "./types"
 import { linearTeamIssuesDataSchema } from "./types"
@@ -69,6 +70,7 @@ query GetIssuesByState($teamId: String!, $stateIds: [ID!]!, $cursor: String) {
         id identifier title description url
         state { id name type }
         team { id key }
+        labels { nodes { name } }
       }
       pageInfo {
         hasNextPage
@@ -109,6 +111,26 @@ export async function fetchIssuesByState(
   logger.info("tracker-client", `Fetched ${allIssues.length} issues for states`, { stateIds: stateIds.join(",") })
 
   return allIssues
+}
+
+const ISSUE_LABELS_QUERY = `
+query GetIssueLabels($issueId: String!) {
+  issue(id: $issueId) {
+    labels { nodes { name } }
+  }
+}
+`
+
+export async function fetchIssueLabels(
+  apiKey: string,
+  issueId: string,
+): Promise<string[]> {
+  const data = await linearGraphQL<{ issue?: { labels?: { nodes: Array<{ name: string }> } } }>(
+    apiKey,
+    ISSUE_LABELS_QUERY,
+    { issueId },
+  )
+  return data?.issue?.labels?.nodes?.map((l) => l.name) ?? []
 }
 
 // ── Mutations ───────────────────────────────────────────────────────
@@ -161,9 +183,102 @@ export async function addIssueComment(
   }
 }
 
+// ── Label Management ────────────────────────────────────────────────
+
+const FIND_LABEL_QUERY = `
+query FindLabel($teamId: String!, $name: String!) {
+  issueLabels(filter: { team: { id: { eq: $teamId } }, name: { eq: $name } }) {
+    nodes { id name }
+  }
+}
+`
+
+const CREATE_LABEL_MUTATION = `
+mutation CreateLabel($teamId: String!, $name: String!) {
+  issueLabelCreate(input: { teamId: $teamId, name: $name }) {
+    success
+    issueLabel { id }
+  }
+}
+`
+
+const ADD_LABEL_TO_ISSUE_MUTATION = `
+mutation AddLabelToIssue($issueId: String!, $labelIds: [String!]!) {
+  issueUpdate(id: $issueId, input: { labelIds: $labelIds }) {
+    success
+  }
+}
+`
+
+/**
+ * Add a label to an issue by name. Creates the label on-demand if it doesn't exist.
+ * Failures are logged but not thrown — label attachment is non-critical for routing.
+ */
+export async function addIssueLabel(
+  apiKey: string,
+  teamId: string,
+  issueId: string,
+  labelName: string,
+): Promise<void> {
+  try {
+    // Find existing label
+    const findData = await linearGraphQL<{
+      issueLabels?: { nodes: Array<{ id: string; name: string }> }
+    }>(apiKey, FIND_LABEL_QUERY, { teamId, name: labelName })
+
+    let labelId = findData?.issueLabels?.nodes?.[0]?.id
+
+    // Create label if not found
+    if (!labelId) {
+      const createData = await linearGraphQL<{
+        issueLabelCreate?: { success: boolean; issueLabel?: { id: string } }
+      }>(apiKey, CREATE_LABEL_MUTATION, { teamId, name: labelName })
+
+      labelId = createData?.issueLabelCreate?.issueLabel?.id
+      if (!labelId) {
+        logger.warn("tracker-client", `Failed to create label "${labelName}" for issue ${issueId}`)
+        return
+      }
+    }
+
+    // Fetch current labels to preserve them
+    const currentLabels = await fetchIssueLabelsById(apiKey, issueId)
+    const allLabelIds = [...new Set([...currentLabels, labelId])]
+
+    // Attach label to issue
+    await linearGraphQL<LinearMutationData>(
+      apiKey,
+      ADD_LABEL_TO_ISSUE_MUTATION,
+      { issueId, labelIds: allLabelIds },
+    )
+
+    logger.info("tracker-client", `Added label "${labelName}" to issue ${issueId}`)
+  } catch (err) {
+    logger.warn("tracker-client", `Failed to add label "${labelName}" to issue ${issueId}: ${(err as Error).message}`)
+  }
+}
+
+const ISSUE_LABEL_IDS_QUERY = `
+query GetIssueLabelIds($issueId: String!) {
+  issue(id: $issueId) {
+    labels { nodes { id } }
+  }
+}
+`
+
+async function fetchIssueLabelsById(apiKey: string, issueId: string): Promise<string[]> {
+  const data = await linearGraphQL<{ issue?: { labels?: { nodes: Array<{ id: string }> } } }>(
+    apiKey,
+    ISSUE_LABEL_IDS_QUERY,
+    { issueId },
+  )
+  return data?.issue?.labels?.nodes?.map((l) => l.id) ?? []
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────
 
 function nodeToIssue(node: LinearIssueNode): Issue {
+  const labels = node.labels?.nodes?.map((l) => l.name) ?? []
   return {
     id: node.id,
     identifier: node.identifier,
@@ -172,5 +287,7 @@ function nodeToIssue(node: LinearIssueNode): Issue {
     url: node.url,
     status: node.state,
     team: node.team,
+    labels,
+    score: parseScoreFromLabels(labels),
   }
 }
