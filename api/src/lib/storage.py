@@ -1,4 +1,4 @@
-from miniopy_async import Minio
+from miniopy_async import Minio  # type: ignore[attr-defined]
 
 from src.lib.config import settings
 

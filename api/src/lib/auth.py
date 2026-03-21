@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from typing import Annotated
 
 import jwt
 from fastapi import Depends, Request
@@ -40,4 +41,4 @@ async def get_current_user(request: Request) -> dict[str, object]:
     return decode_access_token(token)
 
 
-CurrentUser = Depends(get_current_user)
+CurrentUser = Annotated[dict[str, object], Depends(get_current_user)]

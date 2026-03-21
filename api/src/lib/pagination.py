@@ -11,13 +11,13 @@ class PaginationMeta(BaseModel):
 
 
 class PaginatedResponse[T](BaseModel):
-    data: list[Any]
+    data: list[T]
     meta: PaginationMeta
     errors: list[Any] | None = None
 
 
 class SuccessResponse[T](BaseModel):
-    data: Any
+    data: T
     meta: dict[str, Any] | None = None
     errors: list[Any] | None = None
 
