@@ -7,13 +7,12 @@ import {
   OFFICE_HEIGHT,
   DESK_POSITIONS,
   FURNITURE_POSITIONS,
+  MAX_WORKER_SLOTS,
 } from "@/features/office/utils/office-layout"
 import { generateFurnitureSprite } from "@/lib/canvas/sprite-generator"
 import { AgentCharacter } from "@/lib/canvas/agent-character"
 import { IssueBubble } from "@/lib/canvas/issue-bubble"
 import type { AgentType, OrchestratorState, WorkspaceStatus } from "@/features/office/types/agent"
-
-const AGENT_TYPES: AgentType[] = ["claude", "codex", "gemini"]
 
 export class OfficeScene {
   private app: Application
@@ -21,8 +20,10 @@ export class OfficeScene {
   private furnitureLayer: Container
   private characterLayer: Container
   private uiLayer: Container
-  private characters: Map<AgentType, AgentCharacter> = new Map()
-  private bubbles: Map<AgentType, IssueBubble> = new Map()
+  private characters: Map<number, AgentCharacter> = new Map()
+  private bubbles: Map<number, IssueBubble> = new Map()
+  private deskLabels: Map<number, Text> = new Map()
+  private currentAgentType: AgentType = "claude"
   private initialized = false
 
   constructor() {
@@ -122,7 +123,9 @@ export class OfficeScene {
   }
 
   private createDesks() {
-    for (const desk of DESK_POSITIONS) {
+    for (let i = 0; i < DESK_POSITIONS.length; i++) {
+      const desk = DESK_POSITIONS[i]
+
       // Desk
       const deskCanvas = generateFurnitureSprite("desk")
       const deskTexture = Texture.from(deskCanvas)
@@ -147,7 +150,7 @@ export class OfficeScene {
       chairSprite.y = (desk.row + 1) * TILE_SIZE
       this.furnitureLayer.addChild(chairSprite)
 
-      // Label
+      // Label (dynamic — updated in updateState)
       const label = new Text({
         text: desk.label,
         style: new TextStyle({
@@ -159,23 +162,23 @@ export class OfficeScene {
       label.x = desk.col * TILE_SIZE + 2
       label.y = (desk.row + 2) * TILE_SIZE + 4
       this.uiLayer.addChild(label)
+      this.deskLabels.set(i, label)
     }
   }
 
   private createCharacters() {
-    for (let i = 0; i < AGENT_TYPES.length; i++) {
-      const agentType = AGENT_TYPES[i]
+    for (let i = 0; i < DESK_POSITIONS.length; i++) {
       const desk = DESK_POSITIONS[i]
 
-      const character = new AgentCharacter(agentType)
+      const character = new AgentCharacter(this.currentAgentType)
       character.setPosition(desk.col * TILE_SIZE, (desk.row + 1) * TILE_SIZE)
       this.characterLayer.addChild(character.container)
-      this.characters.set(agentType, character)
+      this.characters.set(i, character)
 
       const bubble = new IssueBubble()
       bubble.setPosition(desk.col * TILE_SIZE - 4, (desk.row - 2) * TILE_SIZE)
       this.uiLayer.addChild(bubble.container)
-      this.bubbles.set(agentType, bubble)
+      this.bubbles.set(i, bubble)
     }
   }
 
@@ -184,16 +187,36 @@ export class OfficeScene {
 
     const agentType = state.config.agentType
 
-    // Reset all characters to idle
-    for (const [type, character] of this.characters) {
-      character.setStatus("idle")
-      this.bubbles.get(type)?.hide()
+    // Update all character visuals if agent type changed
+    if (this.currentAgentType !== agentType) {
+      this.currentAgentType = agentType
+      for (const [, character] of this.characters) {
+        character.setAgentType(agentType)
+      }
     }
 
-    // Update active workspaces
-    for (const workspace of state.activeWorkspaces) {
-      const character = this.characters.get(agentType)
-      const bubble = this.bubbles.get(agentType)
+    // Update desk labels to reflect current agent type
+    const agentName = agentType.charAt(0).toUpperCase() + agentType.slice(1)
+    for (let i = 0; i < MAX_WORKER_SLOTS; i++) {
+      const label = this.deskLabels.get(i)
+      if (label) {
+        label.text = `${agentName} #${i + 1}`
+      }
+    }
+
+    // Reset all characters to idle
+    for (const [, character] of this.characters) {
+      character.setStatus("idle")
+    }
+    for (const [, bubble] of this.bubbles) {
+      bubble.hide()
+    }
+
+    // Assign each active workspace to its own worker slot
+    for (let i = 0; i < state.activeWorkspaces.length && i < MAX_WORKER_SLOTS; i++) {
+      const workspace = state.activeWorkspaces[i]
+      const character = this.characters.get(i)
+      const bubble = this.bubbles.get(i)
 
       if (character) {
         character.setStatus(workspace.status)

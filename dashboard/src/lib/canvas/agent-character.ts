@@ -55,6 +55,13 @@ export class AgentCharacter {
     }
   }
 
+  setAgentType(agentType: AgentType) {
+    if (this.agentType !== agentType) {
+      this.agentType = agentType
+      this.updateSprite()
+    }
+  }
+
   setPosition(x: number, y: number) {
     this.container.x = x
     this.container.y = y

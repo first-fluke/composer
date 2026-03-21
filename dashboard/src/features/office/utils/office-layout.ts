@@ -11,10 +11,12 @@ export interface DeskPosition {
 }
 
 export const DESK_POSITIONS: DeskPosition[] = [
-  { col: 3, row: 5, label: "Claude" },
-  { col: 7, row: 5, label: "Codex" },
-  { col: 11, row: 5, label: "Gemini" },
+  { col: 3, row: 5, label: "Worker #1" },
+  { col: 7, row: 5, label: "Worker #2" },
+  { col: 11, row: 5, label: "Worker #3" },
 ]
+
+export const MAX_WORKER_SLOTS = DESK_POSITIONS.length
 
 export const FURNITURE_POSITIONS = [
   { col: 1, row: 1, type: "coffee_machine" as const },
