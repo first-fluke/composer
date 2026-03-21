@@ -20,6 +20,7 @@ export class SupabaseLedgerClient implements LedgerEventPublisher {
     private supabaseAnonKey: string,
     private nodeId: string,
     private teamId: string,
+    private userId: string,
   ) {
     this.flushTimer = setInterval(() => this.flushQueue(), 10_000)
   }
@@ -45,7 +46,7 @@ export class SupabaseLedgerClient implements LedgerEventPublisher {
       body: JSON.stringify({
         team_id: this.teamId,
         node_id: this.nodeId,
-        user_id: "00000000-0000-0000-0000-000000000000",
+        user_id: this.userId,
         type: event.type,
         payload: event.payload,
         client_timestamp: event.clientTimestamp,

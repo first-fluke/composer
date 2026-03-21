@@ -35,12 +35,13 @@ const configSchema = z.object({
   supabaseUrl: z.string().optional(),
   supabaseAnonKey: z.string().optional(),
   teamId: z.string().optional(),
+  displayName: z.string().optional(),
 })
 
 export type Config = z.infer<typeof configSchema>
 
 export function isTeamMode(config: Config): boolean {
-  return !!(config.supabaseUrl && config.supabaseAnonKey)
+  return !!(config.supabaseUrl && config.supabaseAnonKey && config.teamId)
 }
 
 export function loadConfig(): Config {
@@ -70,6 +71,7 @@ export function loadConfig(): Config {
     supabaseUrl: env.SUPABASE_URL || undefined,
     supabaseAnonKey: env.SUPABASE_ANON_KEY || undefined,
     teamId: env.TEAM_ID || undefined,
+    displayName: env.DISPLAY_NAME || undefined,
   }
 
   const result = configSchema.safeParse(raw)

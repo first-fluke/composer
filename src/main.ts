@@ -27,17 +27,25 @@ if (isTeamMode(config)) {
   const { generateNodeId } = await import("./relay/node-id")
   const { SupabaseLedgerClient } = await import("./relay/supabase-ledger-client")
   const { LedgerBridge: Bridge } = await import("./relay/ledger-bridge")
+  const { loadCredentials } = await import("./cli/login")
+
+  const creds = loadCredentials()
+  if (!creds) {
+    logger.error("main", "Team mode requires login. Run `agent-valley login` first.")
+    process.exit(1)
+  }
 
   const nodeId = generateNodeId()
   const publisher = new SupabaseLedgerClient(
     config.supabaseUrl!,
     config.supabaseAnonKey!,
     nodeId,
-    config.teamId ?? "",
+    config.teamId!,
+    creds.userId,
   )
   bridge = new Bridge(orchestrator, publisher, nodeId)
 
-  logger.info("main", `Team mode enabled — nodeId: ${nodeId}`)
+  logger.info("main", `Team mode enabled — nodeId: ${nodeId}, user: ${creds.email}`)
 }
 
 // Graceful shutdown

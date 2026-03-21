@@ -1,16 +1,10 @@
 /**
  * Dashboard-side TeamState types.
- * Mirrors domain types but uses serializable structures (arrays instead of Maps/Sets).
+ * Reuses AgentType and ActiveIssue from domain. Adds serializable TeamNode (array-based).
  */
 
-export type AgentType = "claude" | "codex" | "gemini"
-
-export interface ActiveIssue {
-  issueKey: string
-  issueId: string
-  agentType: AgentType
-  startedAt: string
-}
+export type { AgentType, ActiveIssue } from "@agent-valley/domain/ledger"
+import type { AgentType, ActiveIssue } from "@agent-valley/domain/ledger"
 
 export interface TeamNode {
   nodeId: string

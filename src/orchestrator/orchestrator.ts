@@ -110,6 +110,7 @@ export class Orchestrator {
     this.emitEvent("node.join", {
       defaultAgentType: this.config.agentType,
       maxParallel: this.config.maxParallel,
+      displayName: this.config.displayName ?? this.config.agentType,
     })
     logger.info("orchestrator", "Symphony started", {
       agentType: this.config.agentType,
