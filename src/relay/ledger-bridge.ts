@@ -20,6 +20,7 @@ export class LedgerBridge {
     this.register("agent.start", (payload) => this.publish("agent.start", payload))
     this.register("agent.done", (payload) => this.publish("agent.done", payload))
     this.register("agent.failed", (payload) => this.publish("agent.failed", payload))
+    this.register("agent.cancelled", (payload) => this.publish("agent.cancelled", payload))
   }
 
   private register(event: string, handler: (payload: Record<string, unknown>) => void): void {

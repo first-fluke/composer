@@ -1,6 +1,9 @@
 /**
  * SupabaseLedgerClient — publishes ledger events to Supabase PostgreSQL.
  * Implements LedgerEventPublisher with at-least-once delivery.
+ *
+ * Uses user's access token (not anon key) for Authorization header
+ * so RLS policies (auth.uid()) work correctly.
  */
 
 import type { LedgerEvent, LedgerEventPublisher } from "../domain/ledger"
@@ -18,11 +21,16 @@ export class SupabaseLedgerClient implements LedgerEventPublisher {
   constructor(
     private supabaseUrl: string,
     private supabaseAnonKey: string,
+    private accessToken: string,
     private nodeId: string,
     private teamId: string,
     private userId: string,
   ) {
-    this.flushTimer = setInterval(() => this.flushQueue(), 10_000)
+    this.flushTimer = setInterval(() => {
+      this.flushQueue().catch((err) => {
+        logger.error("supabase-ledger", "Unexpected flushQueue error", { error: String(err) })
+      })
+    }, 10_000)
   }
 
   async publish(event: Omit<LedgerEvent, "seq" | "relayTimestamp" | "v">): Promise<void> {
@@ -40,7 +48,7 @@ export class SupabaseLedgerClient implements LedgerEventPublisher {
       headers: {
         "Content-Type": "application/json",
         apikey: this.supabaseAnonKey,
-        Authorization: `Bearer ${this.supabaseAnonKey}`,
+        Authorization: `Bearer ${this.accessToken}`,
         Prefer: "return=minimal",
       },
       body: JSON.stringify({

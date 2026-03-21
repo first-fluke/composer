@@ -30,8 +30,8 @@ if (isTeamMode(config)) {
   const { loadCredentials } = await import("./cli/login")
 
   const creds = loadCredentials()
-  if (!creds) {
-    logger.error("main", "Team mode requires login. Run `agent-valley login` first.")
+  if (!creds || creds.expiresAt <= Date.now()) {
+    logger.error("main", "Team mode requires login or token has expired. Run `agent-valley login` first.")
     process.exit(1)
   }
 
@@ -39,6 +39,7 @@ if (isTeamMode(config)) {
   const publisher = new SupabaseLedgerClient(
     config.supabaseUrl!,
     config.supabaseAnonKey!,
+    creds.accessToken,
     nodeId,
     config.teamId!,
     creds.userId,

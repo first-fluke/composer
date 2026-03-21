@@ -66,7 +66,7 @@ export function useTeamLedger(options: UseTeamLedgerOptions | null) {
     const fetchAndSync = async () => {
       try {
         const res = await fetch(
-          `${supabaseUrl}/rest/v1/ledger_events?team_id=eq.${teamId}&order=seq.asc`,
+          `${supabaseUrl}/rest/v1/ledger_events?team_id=eq.${teamId}&order=seq.desc&limit=1000`,
           {
             headers: {
               apikey: supabaseAnonKey,

@@ -56,10 +56,17 @@ create policy "team_read" on ledger_events for select using (
   team_id in (select team_id from team_members where user_id = auth.uid())
 );
 
--- ledger_events: only own events, nodeId must match email prefix
+-- ledger_events: only own events, user_id must match authenticated user
+-- node_id ownership is enforced by tying it to user_id (same user = same node)
 create policy "own_write" on ledger_events for insert with check (
   user_id = auth.uid()
   and team_id in (select team_id from team_members where user_id = auth.uid())
+  and node_id like (
+    coalesce(
+      (select display_name from team_members where user_id = auth.uid() and team_id = ledger_events.team_id limit 1),
+      auth.uid()::text
+    ) || ':%'
+  )
 );
 
 -- Enable Realtime for ledger_events
