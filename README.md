@@ -139,7 +139,7 @@ Then set up a Linear webhook pointing to `https://your-host:9741/webhook`, and c
 
 ## Installation
 
-Composer works for both **new projects** (full scaffold) and **existing projects** (harness overlay only). The installer auto-detects which mode to use.
+Agent Valley works for both **new projects** (full scaffold) and **existing projects** (harness overlay only). The installer auto-detects which mode to use.
 
 ### New project
 
@@ -153,7 +153,7 @@ cd my-project
 rm -rf .git
 git init
 git add -A
-git commit -m "chore: init from composer"
+git commit -m "chore: init from agent-valley"
 
 # Install dependencies
 bun install
@@ -553,4 +553,4 @@ If you are an AI agent reading this repository, see **[AGENT_SETUP.md](./AGENT_S
 
 ## License
 
-MIT
+AGPL-3.0
