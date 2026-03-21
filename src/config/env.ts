@@ -31,9 +31,17 @@ const configSchema = z.object({
   logLevel: z.enum(["debug", "info", "warn", "error"]),
   logFormat: z.enum(["json", "text"]),
   deliveryMode: z.enum(["merge", "pr"]),
+  // Team mode (optional — auto-detected)
+  supabaseUrl: z.string().optional(),
+  supabaseAnonKey: z.string().optional(),
+  teamId: z.string().optional(),
 })
 
 export type Config = z.infer<typeof configSchema>
+
+export function isTeamMode(config: Config): boolean {
+  return !!(config.supabaseUrl && config.supabaseAnonKey)
+}
 
 export function loadConfig(): Config {
   const env = process.env
@@ -59,6 +67,9 @@ export function loadConfig(): Config {
     logLevel: (env.LOG_LEVEL ?? "info") as "debug" | "info" | "warn" | "error",
     logFormat: (env.LOG_FORMAT ?? "json") as "json" | "text",
     deliveryMode: (env.DELIVERY_MODE ?? "merge") as "merge" | "pr",
+    supabaseUrl: env.SUPABASE_URL || undefined,
+    supabaseAnonKey: env.SUPABASE_ANON_KEY || undefined,
+    teamId: env.TEAM_ID || undefined,
   }
 
   const result = configSchema.safeParse(raw)
