@@ -16,6 +16,8 @@ import { RetryQueue } from "./retry-queue"
 import { parseWorkflow, renderPrompt } from "../config/workflow-loader"
 import { logger } from "../observability/logger"
 
+type OrchestratorEventHandler = (...args: any[]) => void
+
 export class Orchestrator {
   private state: OrchestratorRuntimeState = {
     isRunning: false,
@@ -34,6 +36,31 @@ export class Orchestrator {
 
   /** Maps issueId -> attemptId for active agent sessions, enabling kill on left-in-progress. */
   private activeAttempts = new Map<string, string>()
+
+  /** EventEmitter for team dashboard broadcasting */
+  private eventListeners = new Map<string, Set<OrchestratorEventHandler>>()
+
+  on(event: string, handler: OrchestratorEventHandler): void {
+    const handlers = this.eventListeners.get(event) ?? new Set()
+    handlers.add(handler)
+    this.eventListeners.set(event, handlers)
+  }
+
+  off(event: string, handler: OrchestratorEventHandler): void {
+    this.eventListeners.get(event)?.delete(handler)
+  }
+
+  private emitEvent(event: string, payload: Record<string, unknown>): void {
+    const handlers = this.eventListeners.get(event)
+    if (!handlers) return
+    for (const handler of handlers) {
+      try {
+        handler(payload)
+      } catch (err) {
+        logger.warn("orchestrator", `Event handler error for ${event}`, { error: String(err) })
+      }
+    }
+  }
 
   constructor(private config: Config) {
     this.workspaceManager = new WorkspaceManager(config.workspaceRoot)
@@ -80,6 +107,10 @@ export class Orchestrator {
     // Periodic retry queue processing
     this.retryTimer = setInterval(() => this.processRetryQueue(), 30_000)
 
+    this.emitEvent("node.join", {
+      defaultAgentType: this.config.agentType,
+      maxParallel: this.config.maxParallel,
+    })
     logger.info("orchestrator", "Symphony started", {
       agentType: this.config.agentType,
       maxParallel: String(this.config.maxParallel),
@@ -88,6 +119,7 @@ export class Orchestrator {
 
   async stop(): Promise<void> {
     logger.info("orchestrator", "Shutting down gracefully...")
+    this.emitEvent("node.leave", { reason: "graceful" })
     this.state.isRunning = false
 
     if (this.retryTimer) clearInterval(this.retryTimer)
@@ -335,6 +367,12 @@ export class Orchestrator {
     // Render prompt
     const prompt = renderPrompt(this.promptTemplate, issue, workspace.path, attempt, 0)
 
+    this.emitEvent("agent.start", {
+      agentType: this.config.agentType,
+      issueKey: issue.identifier,
+      issueId: issue.id,
+    })
+
     // Spawn agent
     await this.agentRunner.spawn(attempt, {
       agentType: this.config.agentType,
@@ -397,6 +435,11 @@ export class Orchestrator {
           })
         }
 
+        this.emitEvent("agent.done", {
+          issueKey: issue.identifier,
+          issueId: issue.id,
+          durationMs: Date.now() - new Date(attempt.startedAt).getTime(),
+        })
         logger.info("orchestrator", `Agent completed for ${issue.identifier}`, {
           issueId: issue.id,
           exitCode: completedAttempt.exitCode ?? undefined,
@@ -411,6 +454,11 @@ export class Orchestrator {
         if (ws) ws.status = "failed"
         this.state.activeWorkspaces.delete(issue.id)
         this.activeAttempts.delete(issue.id)
+        this.emitEvent("agent.failed", {
+          issueKey: issue.identifier,
+          issueId: issue.id,
+          error: { code: "AGENT_ERROR", message: err.message, retryable: err.recoverable },
+        })
         logger.warn("orchestrator", `Agent failed for ${issue.identifier}`, {
           issueId: issue.id,
           error: err.message,
