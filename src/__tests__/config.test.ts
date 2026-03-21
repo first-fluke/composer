@@ -1,8 +1,8 @@
 /**
  * Config Layer tests — loadConfig() validation and error messages.
  */
-import { describe, test, expect, beforeEach, afterEach, spyOn } from "bun:test"
-import { loadConfig } from "../config/config.ts"
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
+import { loadConfig } from "../config/env.ts"
 
 /** Minimal valid env vars for loadConfig() to succeed. */
 function validEnv(): Record<string, string> {

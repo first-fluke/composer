@@ -30,7 +30,7 @@ describe("STATE_ANIMATION_MAP", () => {
     expect(STATE_ANIMATION_MAP.running.loop).toBe(true)
   })
 
-  test("done animation does not loop", () => {
-    expect(STATE_ANIMATION_MAP.done.loop).toBe(false)
+  test("done animation loops", () => {
+    expect(STATE_ANIMATION_MAP.done.loop).toBe(true)
   })
 })

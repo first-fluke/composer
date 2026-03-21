@@ -5,11 +5,11 @@
  *   bun run src/main.ts
  */
 
-import { loadConfig, isTeamMode } from "./config/env"
+import { isTeamMode, loadConfig } from "./config/env"
 import { configureLogger, logger } from "./observability/logger"
 import { Orchestrator } from "./orchestrator/orchestrator"
-import { startHttpServer } from "./server/http-server"
 import type { LedgerBridge } from "./relay/ledger-bridge"
+import { startHttpServer } from "./server/http-server"
 
 // Load config (exits on validation failure)
 const config = loadConfig()

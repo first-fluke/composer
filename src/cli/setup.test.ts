@@ -1,6 +1,6 @@
-import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test"
-import { findWorkflowState, buildEnvContent, linearQuery } from "./setup"
-import type { WorkflowState, EnvConfig } from "./setup"
+import { afterEach, describe, expect, it, mock } from "bun:test"
+import type { EnvConfig, WorkflowState } from "./setup"
+import { buildEnvContent, findWorkflowState, linearQuery } from "./setup"
 
 // ── findWorkflowState ────────────────────────────────────────────────────────
 
@@ -76,6 +76,7 @@ describe("buildEnvContent", () => {
     cancelledStateId: "state-cancel",
     workspaceRoot: "/home/user/workspaces",
     agentType: "claude",
+    maxParallel: 3,
   }
 
   it("generates valid .env content with all fields", () => {
@@ -91,6 +92,7 @@ describe("buildEnvContent", () => {
     expect(content).toContain("LINEAR_WORKFLOW_STATE_CANCELLED=state-cancel")
     expect(content).toContain("WORKSPACE_ROOT=/home/user/workspaces")
     expect(content).toContain("AGENT_TYPE=claude")
+    expect(content).toContain("MAX_PARALLEL=3")
     expect(content).toContain("SERVER_PORT=9741")
     expect(content).toContain("LOG_LEVEL=info")
     expect(content).toContain("LOG_FORMAT=json")
@@ -141,7 +143,7 @@ describe("linearQuery", () => {
     await linearQuery("lin_api_key123", "{ teams { nodes { id } } }")
 
     expect(capturedInit?.method).toBe("POST")
-    expect((capturedInit?.headers as Record<string, string>)["Authorization"]).toBe("lin_api_key123")
+    expect((capturedInit?.headers as Record<string, string>).Authorization).toBe("lin_api_key123")
     expect((capturedInit?.headers as Record<string, string>)["Content-Type"]).toBe("application/json")
 
     const body = JSON.parse(capturedInit?.body as string)
@@ -149,8 +151,8 @@ describe("linearQuery", () => {
   })
 
   it("returns data on success", async () => {
-    globalThis.fetch = mock(async () =>
-      new Response(JSON.stringify({ data: { teams: { nodes: [{ id: "1" }] } } }), { status: 200 }),
+    globalThis.fetch = mock(
+      async () => new Response(JSON.stringify({ data: { teams: { nodes: [{ id: "1" }] } } }), { status: 200 }),
     ) as any
 
     const result = await linearQuery("key", "{ teams { nodes { id } } }")
@@ -158,16 +160,14 @@ describe("linearQuery", () => {
   })
 
   it("throws on HTTP error", async () => {
-    globalThis.fetch = mock(async () =>
-      new Response("Unauthorized", { status: 401 }),
-    ) as any
+    globalThis.fetch = mock(async () => new Response("Unauthorized", { status: 401 })) as any
 
     expect(linearQuery("bad_key", "{ viewer { id } }")).rejects.toThrow("Linear API HTTP 401")
   })
 
   it("throws on GraphQL error", async () => {
-    globalThis.fetch = mock(async () =>
-      new Response(JSON.stringify({ errors: [{ message: "Invalid query" }] }), { status: 200 }),
+    globalThis.fetch = mock(
+      async () => new Response(JSON.stringify({ errors: [{ message: "Invalid query" }] }), { status: 200 }),
     ) as any
 
     expect(linearQuery("key", "{ bad }")).rejects.toThrow("Invalid query")

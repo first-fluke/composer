@@ -6,8 +6,8 @@
  */
 
 import { spawn } from "node:child_process"
-import { BaseSession, buildAgentEnv } from "./base-session"
 import type { AgentConfig } from "./agent-session"
+import { BaseSession, buildAgentEnv } from "./base-session"
 
 interface JsonRpcRequest {
   jsonrpc: "2.0"
@@ -30,10 +30,13 @@ export class CodexSession extends BaseSession {
   private threadId: string | null = null
   private output = ""
   private filesChanged: string[] = []
-  private pendingResolvers = new Map<number, {
-    resolve: (value: unknown) => void
-    reject: (error: Error) => void
-  }>()
+  private pendingResolvers = new Map<
+    number,
+    {
+      resolve: (value: unknown) => void
+      reject: (error: Error) => void
+    }
+  >()
 
   async start(config: AgentConfig): Promise<void> {
     this.config = config
@@ -63,11 +66,11 @@ export class CodexSession extends BaseSession {
     this.output = ""
     this.filesChanged = []
 
-    const threadResult = await this.rpc("thread/start", {
-      cwd: this.config!.workspacePath,
+    const threadResult = (await this.rpc("thread/start", {
+      cwd: this.config?.workspacePath,
       approvalPolicy: "never",
       ephemeral: true,
-    }) as { thread: { id: string } }
+    })) as { thread: { id: string } }
 
     this.threadId = threadResult.thread.id
 
@@ -102,8 +105,8 @@ export class CodexSession extends BaseSession {
   private async rpc(method: string, params: Record<string, unknown>): Promise<unknown> {
     const id = ++this.rpcId
     const request: JsonRpcRequest = { jsonrpc: "2.0", id, method, params }
-    const line = JSON.stringify(request) + "\n"
-    this.process!.stdin!.write(line)
+    const line = `${JSON.stringify(request)}\n`
+    this.process?.stdin?.write(line)
 
     return new Promise((resolve, reject) => {
       this.pendingResolvers.set(id, { resolve, reject })
@@ -133,7 +136,7 @@ export class CodexSession extends BaseSession {
           const msg: JsonRpcResponse = JSON.parse(line)
           this.handleMessage(msg)
         } catch {
-          this.output += line + "\n"
+          this.output += `${line}\n`
           this.emit({ type: "output", chunk: line })
         }
       }
@@ -160,23 +163,22 @@ export class CodexSession extends BaseSession {
     // Server notification
     switch (msg.method) {
       case "item/agentMessage/delta": {
-        const chunk = (msg.params?.["delta"] as string | undefined) ?? ""
+        const chunk = (msg.params?.delta as string | undefined) ?? ""
         this.output += chunk
         this.emit({ type: "output", chunk })
         break
       }
 
       case "item/commandExecution/outputDelta": {
-        const tool = (msg.params?.["command"] as string | undefined) ?? "shell"
+        const tool = (msg.params?.command as string | undefined) ?? "shell"
         this.emit({ type: "toolUse", tool, args: msg.params })
         break
       }
 
       case "item/fileChange/outputDelta": {
-        const path = (msg.params?.["path"] as string | undefined) ?? ""
-        const rawType = msg.params?.["changeType"] as string | undefined
-        const changeType: "add" | "modify" | "delete" =
-          rawType === "add" || rawType === "delete" ? rawType : "modify"
+        const path = (msg.params?.path as string | undefined) ?? ""
+        const rawType = msg.params?.changeType as string | undefined
+        const changeType: "add" | "modify" | "delete" = rawType === "add" || rawType === "delete" ? rawType : "modify"
         if (path && !this.filesChanged.includes(path)) {
           this.filesChanged.push(path)
         }
@@ -192,7 +194,7 @@ export class CodexSession extends BaseSession {
       }
 
       case "error": {
-        const errMsg = (msg.params?.["message"] as string | undefined) ?? "Unknown codex error"
+        const errMsg = (msg.params?.message as string | undefined) ?? "Unknown codex error"
         this.emitError("UNKNOWN", errMsg, true)
         break
       }

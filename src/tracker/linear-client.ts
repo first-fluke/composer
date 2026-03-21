@@ -2,21 +2,17 @@
  * Linear Client — GraphQL API for issue queries and mutations.
  */
 
-import { parseScoreFromLabels } from "../domain/models"
 import type { Issue } from "../domain/models"
-import type { LinearGraphQLResponse, LinearTeamIssuesData, LinearMutationData, LinearIssueNode } from "./types"
-import { linearTeamIssuesDataSchema } from "./types"
+import { parseScoreFromLabels } from "../domain/models"
 import { logger } from "../observability/logger"
+import type { LinearGraphQLResponse, LinearIssueNode, LinearMutationData, LinearTeamIssuesData } from "./types"
+import { linearTeamIssuesDataSchema } from "./types"
 
 const LINEAR_API_URL = "https://api.linear.app/graphql"
 
 // ── GraphQL Helper ──────────────────────────────────────────────────
 
-async function linearGraphQL<T>(
-  apiKey: string,
-  query: string,
-  variables: Record<string, unknown>,
-): Promise<T> {
+async function linearGraphQL<T>(apiKey: string, query: string, variables: Record<string, unknown>): Promise<T> {
   const response = await fetch(LINEAR_API_URL, {
     method: "POST",
     headers: {
@@ -29,8 +25,8 @@ async function linearGraphQL<T>(
   if (response.status === 401) {
     throw new Error(
       "Linear API authentication failed.\n" +
-      "  Fix: Check LINEAR_API_KEY in .env\n" +
-      "  Ensure it starts with lin_api_"
+        "  Fix: Check LINEAR_API_KEY in .env\n" +
+        "  Ensure it starts with lin_api_",
     )
   }
 
@@ -81,20 +77,16 @@ query GetIssuesByState($teamId: String!, $stateIds: [ID!]!, $cursor: String) {
 }
 `
 
-export async function fetchIssuesByState(
-  apiKey: string,
-  teamUuid: string,
-  stateIds: string[],
-): Promise<Issue[]> {
+export async function fetchIssuesByState(apiKey: string, teamUuid: string, stateIds: string[]): Promise<Issue[]> {
   const allIssues: Issue[] = []
   let cursor: string | null = null
 
   do {
-    const data = await linearGraphQL<LinearTeamIssuesData>(
-      apiKey,
-      ISSUES_BY_STATE_QUERY,
-      { teamId: teamUuid, stateIds, cursor },
-    )
+    const data = await linearGraphQL<LinearTeamIssuesData>(apiKey, ISSUES_BY_STATE_QUERY, {
+      teamId: teamUuid,
+      stateIds,
+      cursor,
+    })
 
     const parsed = linearTeamIssuesDataSchema.safeParse(data)
     if (!parsed.success) {
@@ -121,10 +113,7 @@ query GetIssueLabels($issueId: String!) {
 }
 `
 
-export async function fetchIssueLabels(
-  apiKey: string,
-  issueId: string,
-): Promise<string[]> {
+export async function fetchIssueLabels(apiKey: string, issueId: string): Promise<string[]> {
   const data = await linearGraphQL<{ issue?: { labels?: { nodes: Array<{ name: string }> } } }>(
     apiKey,
     ISSUE_LABELS_QUERY,
@@ -143,16 +132,8 @@ mutation UpdateIssueState($issueId: String!, $stateId: String!) {
 }
 `
 
-export async function updateIssueState(
-  apiKey: string,
-  issueId: string,
-  stateId: string,
-): Promise<void> {
-  const data = await linearGraphQL<LinearMutationData>(
-    apiKey,
-    UPDATE_ISSUE_STATE_MUTATION,
-    { issueId, stateId },
-  )
+export async function updateIssueState(apiKey: string, issueId: string, stateId: string): Promise<void> {
+  const data = await linearGraphQL<LinearMutationData>(apiKey, UPDATE_ISSUE_STATE_MUTATION, { issueId, stateId })
 
   if (!data?.issueUpdate?.success) {
     throw new Error(`Failed to update issue state: issueId=${issueId}, stateId=${stateId}`)
@@ -167,16 +148,8 @@ mutation AddIssueComment($issueId: String!, $body: String!) {
 }
 `
 
-export async function addIssueComment(
-  apiKey: string,
-  issueId: string,
-  body: string,
-): Promise<void> {
-  const data = await linearGraphQL<LinearMutationData>(
-    apiKey,
-    ADD_COMMENT_MUTATION,
-    { issueId, body },
-  )
+export async function addIssueComment(apiKey: string, issueId: string, body: string): Promise<void> {
+  const data = await linearGraphQL<LinearMutationData>(apiKey, ADD_COMMENT_MUTATION, { issueId, body })
 
   if (!data?.commentCreate?.success) {
     throw new Error(`Failed to add comment to issue: issueId=${issueId}`)
@@ -214,12 +187,7 @@ mutation AddLabelToIssue($issueId: String!, $labelIds: [String!]!) {
  * Add a label to an issue by name. Creates the label on-demand if it doesn't exist.
  * Failures are logged but not thrown — label attachment is non-critical for routing.
  */
-export async function addIssueLabel(
-  apiKey: string,
-  teamId: string,
-  issueId: string,
-  labelName: string,
-): Promise<void> {
+export async function addIssueLabel(apiKey: string, teamId: string, issueId: string, labelName: string): Promise<void> {
   try {
     // Find existing label
     const findData = await linearGraphQL<{
@@ -246,11 +214,7 @@ export async function addIssueLabel(
     const allLabelIds = [...new Set([...currentLabels, labelId])]
 
     // Attach label to issue
-    await linearGraphQL<LinearMutationData>(
-      apiKey,
-      ADD_LABEL_TO_ISSUE_MUTATION,
-      { issueId, labelIds: allLabelIds },
-    )
+    await linearGraphQL<LinearMutationData>(apiKey, ADD_LABEL_TO_ISSUE_MUTATION, { issueId, labelIds: allLabelIds })
 
     logger.info("tracker-client", `Added label "${labelName}" to issue ${issueId}`)
   } catch (err) {

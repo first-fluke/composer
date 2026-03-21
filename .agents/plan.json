@@ -30,7 +30,15 @@
     },
     "C": {
       "title": "Agent Runner + Sessions",
-      "files": ["src/orchestrator/agent-runner.ts", "src/sessions/session-factory.ts", "src/sessions/base-session.ts", "src/sessions/claude-session.ts", "src/sessions/codex-session.ts", "src/sessions/gemini-session.ts", "src/sessions/index.ts"],
+      "files": [
+        "src/orchestrator/agent-runner.ts",
+        "src/sessions/session-factory.ts",
+        "src/sessions/base-session.ts",
+        "src/sessions/claude-session.ts",
+        "src/sessions/codex-session.ts",
+        "src/sessions/gemini-session.ts",
+        "src/sessions/index.ts"
+      ],
       "tasks": [
         "HIGH: setTimeout 메모리 누수 수정 (타이머 저장/해제)",
         "HIGH: event listener 정리 (complete/error 한번만)",
@@ -43,7 +51,13 @@
     },
     "D": {
       "title": "Config + Tracker + RetryQueue",
-      "files": ["src/config/config.ts", "src/tracker/linear-client.ts", "src/tracker/webhook-handler.ts", "src/tracker/types.ts", "src/orchestrator/retry-queue.ts"],
+      "files": [
+        "src/config/config.ts",
+        "src/tracker/linear-client.ts",
+        "src/tracker/webhook-handler.ts",
+        "src/tracker/types.ts",
+        "src/orchestrator/retry-queue.ts"
+      ],
       "tasks": [
         "HIGH: API 응답 런타임 검증 (Zod)",
         "HIGH: Pagination cursor 구현",

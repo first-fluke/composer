@@ -3,9 +3,9 @@
  * Fire-and-forget: Supabase failures must never stop the Orchestrator.
  */
 
-import type { Orchestrator } from "../orchestrator/orchestrator"
 import type { LedgerEventPublisher } from "../domain/ledger"
 import { logger } from "../observability/logger"
+import type { Orchestrator } from "../orchestrator/orchestrator"
 
 export class LedgerBridge {
   private handlers = new Map<string, (payload: Record<string, unknown>) => void>()

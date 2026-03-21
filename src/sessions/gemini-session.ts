@@ -8,8 +8,8 @@
  */
 
 import { spawn } from "node:child_process"
-import { BaseSession, buildAgentEnv, waitForExit } from "./base-session"
 import type { AgentConfig } from "./agent-session"
+import { BaseSession, buildAgentEnv } from "./base-session"
 
 export class GeminiSession extends BaseSession {
   private output = ""
@@ -20,7 +20,7 @@ export class GeminiSession extends BaseSession {
 
   async start(config: AgentConfig): Promise<void> {
     this.config = config
-    this.useAcp = config.options?.useAcp === true && await this.detectAcpSupport()
+    this.useAcp = config.options?.useAcp === true && (await this.detectAcpSupport())
     this.started = true
 
     if (this.useAcp) {
@@ -49,7 +49,7 @@ export class GeminiSession extends BaseSession {
     if (this.useAcp) {
       if (!this.assertStarted()) return
       const message = JSON.stringify({ type: "prompt", content: prompt })
-      this.process!.stdin!.write(message + "\n")
+      this.process?.stdin?.write(`${message}\n`)
     } else {
       await this.runOneShotWithPrompt(prompt)
     }
@@ -88,11 +88,11 @@ export class GeminiSession extends BaseSession {
     this.process = spawn("gemini", args, {
       cwd: config.workspacePath,
       env: buildAgentEnv("gemini", config.env) as NodeJS.ProcessEnv,
-      stdio: ["pipe", "pipe", "ignore"],  // gemini outputs heavy MCP noise to stderr — ignore to prevent pipe blocking
+      stdio: ["pipe", "pipe", "ignore"], // gemini outputs heavy MCP noise to stderr — ignore to prevent pipe blocking
     })
 
-    this.process.stdin!.write(prompt, "utf-8")
-    this.process.stdin!.end()
+    this.process.stdin?.write(prompt, "utf-8")
+    this.process.stdin?.end()
 
     try {
       await this.readFallbackOutput()
@@ -133,9 +133,7 @@ export class GeminiSession extends BaseSession {
             if (jsonStart >= 0) {
               const jsonStr = raw.slice(jsonStart)
               const result = JSON.parse(jsonStr) as Record<string, unknown>
-              this.output = (result["response"] as string | undefined)
-                ?? (result["text"] as string | undefined)
-                ?? raw
+              this.output = (result.response as string | undefined) ?? (result.text as string | undefined) ?? raw
             } else {
               this.output = raw
             }
@@ -149,81 +147,12 @@ export class GeminiSession extends BaseSession {
             result: this.buildRunResult(this.output, this.filesChanged),
           })
         } else {
-          this.emitError(
-            exitCode === -1 ? "TIMEOUT" : "CRASH",
-            `gemini exited with code ${exitCode}`,
-            true,
-          )
+          this.emitError(exitCode === -1 ? "TIMEOUT" : "CRASH", `gemini exited with code ${exitCode}`, true)
         }
 
         resolve()
       })
     })
-  }
-
-  // ── ACP stream parser (for future use) ──────────────────────────────────
-
-  private readAcpStream(): Promise<void> {
-    return new Promise((resolve) => {
-      const proc = this.process
-      if (!proc?.stdout) {
-        resolve()
-        return
-      }
-
-      const decoder = new TextDecoder()
-      let buffer = ""
-
-      proc.stdout.on("data", (chunk: Buffer) => {
-        buffer += decoder.decode(chunk, { stream: true })
-        const lines = buffer.split("\n")
-        buffer = lines.pop() ?? ""
-
-        for (const line of lines) {
-          if (!line.trim()) continue
-          try {
-            const event: unknown = JSON.parse(line)
-            this.handleAcpEvent(event)
-          } catch {
-            this.output += line + "\n"
-            this.emit({ type: "output", chunk: line })
-          }
-        }
-      })
-
-      proc.stdout.on("error", () => {
-        resolve()
-      })
-
-      proc.once("close", () => resolve())
-    })
-  }
-
-  private handleAcpEvent(event: unknown): void {
-    if (typeof event !== "object" || event === null) return
-    const e = event as Record<string, unknown>
-
-    switch (e["type"]) {
-      case "text":
-      case "message": {
-        const text = (e["content"] as string | undefined) ?? (e["text"] as string | undefined) ?? ""
-        if (text) {
-          this.output += text
-          this.emit({ type: "output", chunk: text })
-        }
-        break
-      }
-      case "tool_call": {
-        this.emit({
-          type: "toolUse",
-          tool: (e["name"] as string | undefined) ?? "unknown",
-          args: e["args"] ?? {},
-        })
-        break
-      }
-      default:
-        this.emit({ type: "heartbeat", timestamp: new Date().toISOString() })
-    }
   }
 
   // ── ACP detection (cached per instance) ───────────────────────────────

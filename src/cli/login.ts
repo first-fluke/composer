@@ -3,11 +3,11 @@
  * Stores credentials in ~/.agent-valley/credentials.json (0600).
  */
 
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { homedir } from "node:os"
+import { join } from "node:path"
 import * as p from "@clack/prompts"
 import pc from "picocolors"
-import { mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync } from "node:fs"
-import { join } from "node:path"
-import { homedir } from "node:os"
 
 const CONFIG_DIR = join(homedir(), ".agent-valley")
 const CREDENTIALS_FILE = join(CONFIG_DIR, "credentials.json")
@@ -54,13 +54,19 @@ async function loginWithEmail(supabaseUrl: string, supabaseAnonKey: string): Pro
     placeholder: "you@company.com",
     validate: (v) => (!v.includes("@") ? "유효한 이메일을 입력하세요" : undefined),
   })
-  if (p.isCancel(email)) { p.cancel("취소되었습니다"); process.exit(0) }
+  if (p.isCancel(email)) {
+    p.cancel("취소되었습니다")
+    process.exit(0)
+  }
 
   const password = await p.password({
     message: "비밀번호",
     validate: (v) => (v.length < 6 ? "비밀번호는 6자 이상이어야 합니다" : undefined),
   })
-  if (p.isCancel(password)) { p.cancel("취소되었습니다"); process.exit(0) }
+  if (p.isCancel(password)) {
+    p.cancel("취소되었습니다")
+    process.exit(0)
+  }
 
   const res = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
     method: "POST",
@@ -72,12 +78,12 @@ async function loginWithEmail(supabaseUrl: string, supabaseAnonKey: string): Pro
   })
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as Record<string, unknown>
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
     const msg = (body.error_description ?? body.msg ?? "로그인 실패") as string
     throw new Error(msg)
   }
 
-  const data = await res.json() as {
+  const data = (await res.json()) as {
     access_token: string
     refresh_token: string
     expires_in: number
@@ -100,13 +106,19 @@ async function signupWithEmail(supabaseUrl: string, supabaseAnonKey: string): Pr
     placeholder: "you@company.com",
     validate: (v) => (!v.includes("@") ? "유효한 이메일을 입력하세요" : undefined),
   })
-  if (p.isCancel(email)) { p.cancel("취소되었습니다"); process.exit(0) }
+  if (p.isCancel(email)) {
+    p.cancel("취소되었습니다")
+    process.exit(0)
+  }
 
   const password = await p.password({
     message: "비밀번호 (6자 이상)",
     validate: (v) => (v.length < 6 ? "비밀번호는 6자 이상이어야 합니다" : undefined),
   })
-  if (p.isCancel(password)) { p.cancel("취소되었습니다"); process.exit(0) }
+  if (p.isCancel(password)) {
+    p.cancel("취소되었습니다")
+    process.exit(0)
+  }
 
   const res = await fetch(`${supabaseUrl}/auth/v1/signup`, {
     method: "POST",
@@ -118,12 +130,12 @@ async function signupWithEmail(supabaseUrl: string, supabaseAnonKey: string): Pr
   })
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as Record<string, unknown>
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
     const msg = (body.error_description ?? body.msg ?? "가입 실패") as string
     throw new Error(msg)
   }
 
-  const data = await res.json() as {
+  const data = (await res.json()) as {
     access_token: string
     refresh_token: string
     expires_in: number
@@ -163,14 +175,20 @@ export async function login(): Promise<void> {
     placeholder: "https://xxx.supabase.co",
     validate: (v) => (!v.startsWith("https://") ? "https://로 시작해야 합니다" : undefined),
   })
-  if (p.isCancel(supabaseUrl)) { p.cancel("취소되었습니다"); process.exit(0) }
+  if (p.isCancel(supabaseUrl)) {
+    p.cancel("취소되었습니다")
+    process.exit(0)
+  }
 
   const supabaseAnonKey = await p.text({
     message: "Supabase Anon Key",
     placeholder: "eyJhbGciOiJIUzI1NiIs...",
     validate: (v) => (v.length < 20 ? "유효한 키를 입력하세요" : undefined),
   })
-  if (p.isCancel(supabaseAnonKey)) { p.cancel("취소되었습니다"); process.exit(0) }
+  if (p.isCancel(supabaseAnonKey)) {
+    p.cancel("취소되었습니다")
+    process.exit(0)
+  }
 
   const action = await p.select({
     message: "로그인 방식",
@@ -179,15 +197,19 @@ export async function login(): Promise<void> {
       { value: "signup", label: "새 계정 만들기" },
     ],
   })
-  if (p.isCancel(action)) { p.cancel("취소되었습니다"); process.exit(0) }
+  if (p.isCancel(action)) {
+    p.cancel("취소되었습니다")
+    process.exit(0)
+  }
 
   const spinner = p.spinner()
   spinner.start("인증 중...")
 
   try {
-    const creds = action === "signup"
-      ? await signupWithEmail(supabaseUrl as string, supabaseAnonKey as string)
-      : await loginWithEmail(supabaseUrl as string, supabaseAnonKey as string)
+    const creds =
+      action === "signup"
+        ? await signupWithEmail(supabaseUrl as string, supabaseAnonKey as string)
+        : await loginWithEmail(supabaseUrl as string, supabaseAnonKey as string)
 
     saveCredentials(creds)
     spinner.stop("인증 완료")

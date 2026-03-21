@@ -66,9 +66,7 @@ export type AgentEvent =
 
 export type AgentEventType = AgentEvent["type"]
 
-export type AgentEventHandler<T extends AgentEventType> = (
-  event: Extract<AgentEvent, { type: T }>
-) => void
+export type AgentEventHandler<T extends AgentEventType> = (event: Extract<AgentEvent, { type: T }>) => void
 
 // ── Session Interface ─────────────────────────────────────────────────────────
 

@@ -22,7 +22,7 @@ export function parseWorkflow(content: string): ParsedWorkflow {
   if (parts.length < 3) {
     throw new Error(
       "WORKFLOW.md must have YAML front matter between --- delimiters.\n" +
-      "  Fix: Ensure WORKFLOW.md starts with --- and has a closing ---"
+        "  Fix: Ensure WORKFLOW.md starts with --- and has a closing ---",
     )
   }
 
@@ -52,9 +52,7 @@ export function sanitizeIssueBody(text: string): string {
   if (!text) return ""
 
   // 1. Truncate to max length
-  let sanitized = text.length > MAX_ISSUE_BODY_LENGTH
-    ? text.slice(0, MAX_ISSUE_BODY_LENGTH)
-    : text
+  let sanitized = text.length > MAX_ISSUE_BODY_LENGTH ? text.slice(0, MAX_ISSUE_BODY_LENGTH) : text
 
   // 2. Strip template injection patterns: {{...}} and ${...}
   sanitized = sanitized.replace(/\{\{.*?\}\}/g, "")
@@ -67,9 +65,9 @@ export function sanitizeIssueBody(text: string): string {
     /disregard\s+previous\s+instructions/gi,
     /forget\s+previous\s+instructions/gi,
     /override\s+previous\s+instructions/gi,
-    /^system\s*:/gmi,
-    /^assistant\s*:/gmi,
-    /^user\s*:/gmi,
+    /^system\s*:/gim,
+    /^assistant\s*:/gim,
+    /^user\s*:/gim,
     /\bsystem\s+prompt\b/gi,
     /\bnew\s+instructions\s*:/gi,
     /\byou\s+are\s+now\b/gi,
@@ -116,9 +114,9 @@ function parseSimpleYaml(yaml: string): Record<string, unknown> {
       const [key, ...valueParts] = trimmed.split(":")
       const value = valueParts.join(":").trim()
       if (value) {
-        result[key!.trim()] = resolveValue(value)
+        result[key?.trim()] = resolveValue(value)
       } else {
-        currentSection = key!.trim()
+        currentSection = key?.trim()
         result[currentSection] = result[currentSection] ?? {}
       }
     }
@@ -127,7 +125,7 @@ function parseSimpleYaml(yaml: string): Record<string, unknown> {
       const [key, ...valueParts] = trimmed.split(":")
       const value = valueParts.join(":").trim()
       const section = result[currentSection] as Record<string, unknown>
-      section[key!.trim()] = resolveValue(value)
+      section[key?.trim()] = resolveValue(value)
     }
   }
 

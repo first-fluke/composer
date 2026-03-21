@@ -5,6 +5,7 @@
 
 import * as p from "@clack/prompts"
 import pc from "picocolors"
+import { detectHardware } from "../config/hardware"
 
 export interface LinearTeam {
   id: string
@@ -33,11 +34,7 @@ export async function linearQuery(apiKey: string, query: string): Promise<Record
   return data.data!
 }
 
-export function findWorkflowState(
-  states: WorkflowState[],
-  names: string[],
-  type: string,
-): WorkflowState | undefined {
+export function findWorkflowState(states: WorkflowState[], names: string[], type: string): WorkflowState | undefined {
   return states.find((st) => names.includes(st.name)) ?? states.find((st) => st.type === type)
 }
 
@@ -52,6 +49,7 @@ export interface EnvConfig {
   cancelledStateId: string
   workspaceRoot: string
   agentType: string
+  maxParallel: number
 }
 
 export function buildEnvContent(config: EnvConfig): string {
@@ -72,6 +70,7 @@ export function buildEnvContent(config: EnvConfig): string {
     "",
     "# ── Agent Selection ──────────────────────────────────────",
     `AGENT_TYPE=${config.agentType}`,
+    `MAX_PARALLEL=${config.maxParallel}`,
     "SERVER_PORT=9741",
     "",
     "# ── Observability (optional) ─────────────────────────────",
@@ -143,10 +142,7 @@ export async function setup(): Promise<void> {
 
   let states: WorkflowState[]
   try {
-    const data = await linearQuery(
-      apiKey,
-      `{ team(id: "${teamUuid}") { states { nodes { id name type } } } }`,
-    )
+    const data = await linearQuery(apiKey, `{ team(id: "${teamUuid}") { states { nodes { id name type } } } }`)
     states = (data.team as any).states.nodes as WorkflowState[]
     s.stop("워크플로우 상태 조회 완료")
   } catch (e) {
@@ -165,7 +161,12 @@ export async function setup(): Promise<void> {
     st ? `${label}: ${pc.green(st.name)} ${pc.dim(st.id)}` : `${label}: ${pc.red("매핑 실패")}`
 
   p.note(
-    [fmt("Todo", todoState), fmt("In Progress", inProgressState), fmt("Done", doneState), fmt("Cancelled", cancelledState)].join("\n"),
+    [
+      fmt("Todo", todoState),
+      fmt("In Progress", inProgressState),
+      fmt("Done", doneState),
+      fmt("Cancelled", cancelledState),
+    ].join("\n"),
     "워크플로우 상태 매핑",
   )
 
@@ -235,6 +236,40 @@ export async function setup(): Promise<void> {
   })
   if (p.isCancel(agentType)) return cancelled()
 
+  // ── Step 7: Max parallel agents (hardware-aware) ────────────────────────
+  const hw = detectHardware()
+
+  p.note(
+    [
+      `CPU: ${pc.cyan(String(hw.cpuCores))} cores`,
+      `RAM: ${pc.cyan(String(hw.totalMemoryGB))} GB`,
+      `추천 동시 에이전트 수: ${pc.green(String(hw.recommended))}`,
+    ].join("\n"),
+    "하드웨어 감지",
+  )
+
+  const useRecommended = await p.confirm({
+    message: `동시 에이전트 수를 ${pc.green(String(hw.recommended))}개로 설정할까요?`,
+    initialValue: true,
+  })
+  if (p.isCancel(useRecommended)) return cancelled()
+
+  let maxParallel: number
+  if (useRecommended) {
+    maxParallel = hw.recommended
+  } else {
+    const custom = await p.text({
+      message: "동시 에이전트 수 (직접 입력)",
+      initialValue: String(hw.cpuCores),
+      validate: (v) => {
+        const n = Number(v)
+        if (!Number.isInteger(n) || n < 1) return "1 이상의 정수를 입력하세요"
+      },
+    })
+    if (p.isCancel(custom)) return cancelled()
+    maxParallel = Number(custom)
+  }
+
   // ── Write .env ───────────────────────────────────────────────────────────
   const env = buildEnvContent({
     apiKey,
@@ -247,6 +282,7 @@ export async function setup(): Promise<void> {
     cancelledStateId: cancelledState.id,
     workspaceRoot: workspaceRoot as string,
     agentType: agentType as string,
+    maxParallel,
   })
 
   await Bun.write(".env", env)

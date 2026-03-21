@@ -2,11 +2,10 @@
  * Agent Runner — Manages AgentSession lifecycle for issue execution.
  */
 
-import type { Issue, Workspace, RunAttempt } from "../domain/models"
-import type { AgentConfig, AgentEvent } from "../sessions/agent-session"
-import { createSession, registerBuiltinSessions } from "../sessions/session-factory"
-import type { AgentSession } from "../sessions/agent-session"
+import type { RunAttempt } from "../domain/models"
 import { logger } from "../observability/logger"
+import type { AgentConfig, AgentEvent, AgentSession } from "../sessions/agent-session"
+import { createSession, registerBuiltinSessions } from "../sessions/session-factory"
 
 export interface RunOptions {
   agentType: string
@@ -38,11 +37,7 @@ export class AgentRunnerService {
     }
   }
 
-  async spawn(
-    attempt: RunAttempt,
-    options: RunOptions,
-    callbacks: RunCallbacks,
-  ): Promise<void> {
+  async spawn(attempt: RunAttempt, options: RunOptions, callbacks: RunCallbacks): Promise<void> {
     await this.ensureRegistered()
 
     const session = createSession(options.agentType)

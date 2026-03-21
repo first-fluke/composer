@@ -13,10 +13,7 @@
 import { program } from "commander"
 import pc from "picocolors"
 
-program
-  .name("agent-valley")
-  .description("Agent Valley — AI agent orchestrator")
-  .version("0.1.0")
+program.name("agent-valley").description("Agent Valley — AI agent orchestrator").version("0.1.0")
 
 // ── setup ────────────────────────────────────────────────────────────────────
 program
@@ -49,7 +46,7 @@ program
         stdout: "inherit",
         stderr: "inherit",
       })
-      console.log(pc.green("▶ Server started (pid: " + proc.pid + ")"))
+      console.log(pc.green(`▶ Server started (pid: ${proc.pid})`))
     }
 
     const restart = async () => {

@@ -52,25 +52,35 @@ export const linearIssueNodeSchema = z.object({
   id: z.string(),
   identifier: z.string(),
   title: z.string(),
-  description: z.string().nullable().transform(v => v ?? ""),
+  description: z
+    .string()
+    .nullable()
+    .transform((v) => v ?? ""),
   url: z.string(),
   state: z.object({ id: z.string(), name: z.string(), type: z.string() }),
   team: z.object({ id: z.string(), key: z.string() }),
-  labels: z.object({
-    nodes: z.array(z.object({ name: z.string() })),
-  }).optional().default({ nodes: [] }),
+  labels: z
+    .object({
+      nodes: z.array(z.object({ name: z.string() })),
+    })
+    .optional()
+    .default({ nodes: [] }),
 })
 
 export const linearTeamIssuesDataSchema = z.object({
-  team: z.object({
-    issues: z.object({
-      nodes: z.array(linearIssueNodeSchema),
-      pageInfo: z.object({
-        hasNextPage: z.boolean(),
-        endCursor: z.string().nullable(),
-      }).optional(),
-    }),
-  }).nullable(),
+  team: z
+    .object({
+      issues: z.object({
+        nodes: z.array(linearIssueNodeSchema),
+        pageInfo: z
+          .object({
+            hasNextPage: z.boolean(),
+            endCursor: z.string().nullable(),
+          })
+          .optional(),
+      }),
+    })
+    .nullable(),
 })
 
 export const linearMutationDataSchema = z.object({

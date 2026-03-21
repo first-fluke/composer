@@ -4,13 +4,9 @@
 
 import { logger } from "../observability/logger"
 
-export interface WebhookHandlerFn {
-  (payload: string, signature: string): Promise<{ status: number; body: string }>
-}
+export type WebhookHandlerFn = (payload: string, signature: string) => Promise<{ status: number; body: string }>
 
-export interface StatusFn {
-  (): Record<string, unknown>
-}
+export type StatusFn = () => Record<string, unknown>
 
 export function startHttpServer(
   port: number,
@@ -23,7 +19,7 @@ export function startHttpServer(
 
   const server = Bun.serve({
     port,
-    hostname: "0.0.0.0",  // Bind to all interfaces (IPv4 + IPv6)
+    hostname: "0.0.0.0", // Bind to all interfaces (IPv4 + IPv6)
     async fetch(req) {
       try {
         const url = new URL(req.url)
@@ -33,29 +29,20 @@ export function startHttpServer(
           // Content-Type validation
           const contentType = req.headers.get("content-type") ?? ""
           if (!contentType.includes("application/json")) {
-            return Response.json(
-              { error: "Unsupported content type. Expected application/json" },
-              { status: 415 },
-            )
+            return Response.json({ error: "Unsupported content type. Expected application/json" }, { status: 415 })
           }
 
           // Request body size limit — check Content-Length header first
           const contentLength = req.headers.get("content-length")
           if (contentLength && parseInt(contentLength, 10) > MAX_PAYLOAD_SIZE) {
-            return Response.json(
-              { error: "Payload too large" },
-              { status: 413 },
-            )
+            return Response.json({ error: "Payload too large" }, { status: 413 })
           }
 
           const payload = await req.text()
 
           // Also check actual body length after reading
           if (payload.length > MAX_PAYLOAD_SIZE) {
-            return Response.json(
-              { error: "Payload too large" },
-              { status: 413 },
-            )
+            return Response.json({ error: "Payload too large" }, { status: 413 })
           }
 
           const signature = req.headers.get("linear-signature") ?? ""
@@ -80,7 +67,10 @@ export function startHttpServer(
 
         return Response.json({ error: "Not found" }, { status: 404 })
       } catch (err) {
-        logger.error("http-server", `Unhandled error in request handler: ${err instanceof Error ? err.message : String(err)}`)
+        logger.error(
+          "http-server",
+          `Unhandled error in request handler: ${err instanceof Error ? err.message : String(err)}`,
+        )
         return Response.json({ error: "Internal server error" }, { status: 500 })
       }
     },

@@ -1,7 +1,7 @@
 /**
  * RetryQueue tests — exponential backoff scheduling.
  */
-import { describe, test, expect, beforeEach } from "bun:test"
+import { beforeEach, describe, expect, test } from "bun:test"
 import { RetryQueue } from "../orchestrator/retry-queue.ts"
 
 describe("RetryQueue", () => {
@@ -51,7 +51,7 @@ describe("RetryQueue", () => {
 
     const ready = pastQueue.drain()
     expect(ready).toHaveLength(1)
-    expect(ready[0]!.issueId).toBe("issue-past")
+    expect(ready[0]?.issueId).toBe("issue-past")
     expect(pastQueue.size).toBe(0)
   })
 
@@ -73,7 +73,7 @@ describe("RetryQueue", () => {
 
     queue.remove("issue-1")
     expect(queue.size).toBe(1)
-    expect(queue.entries[0]!.issueId).toBe("issue-2")
+    expect(queue.entries[0]?.issueId).toBe("issue-2")
   })
 
   test("remove() is a no-op for non-existent issueId", () => {
@@ -121,7 +121,7 @@ describe("RetryQueue", () => {
     queue.add("issue-1", 1, "first error")
     queue.add("issue-1", 2, "second error")
     expect(queue.size).toBe(1)
-    expect(queue.entries[0]!.attemptCount).toBe(2)
-    expect(queue.entries[0]!.lastError).toBe("second error")
+    expect(queue.entries[0]?.attemptCount).toBe(2)
+    expect(queue.entries[0]?.lastError).toBe("second error")
   })
 })

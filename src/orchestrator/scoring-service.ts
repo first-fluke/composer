@@ -3,8 +3,8 @@
  * Application layer: calls LLM, returns ScoreAnalysis. No Linear API calls.
  */
 
-import type { Issue, ScoreAnalysis } from "../domain/models"
 import { sanitizeIssueBody } from "../config/workflow-loader"
+import type { Issue, ScoreAnalysis } from "../domain/models"
 import { logger } from "../observability/logger"
 
 export interface ScoringService {
@@ -61,10 +61,10 @@ export class LlmScoringService implements ScoringService {
 
   private async callLlm(prompt: string): Promise<string> {
     const modelFlag = this.model !== "claude" ? ["--model", this.model] : []
-    const proc = Bun.spawn(
-      ["claude", "--print", "--no-session-persistence", ...modelFlag, "-p", prompt],
-      { stdout: "pipe", stderr: "pipe" },
-    )
+    const proc = Bun.spawn(["claude", "--print", "--no-session-persistence", ...modelFlag, "-p", prompt], {
+      stdout: "pipe",
+      stderr: "pipe",
+    })
 
     const output = await new Response(proc.stdout).text()
     await proc.exited
@@ -127,7 +127,8 @@ export function analyzeScoreInBackground(
 ): void {
   const scorer = new LlmScoringService(scoringModel)
 
-  scorer.analyze(issue.title, issue.description)
+  scorer
+    .analyze(issue.title, issue.description)
     .then(async (analysis) => {
       logger.info("scoring-service", `Score analysis for ${issue.identifier}: ${analysis.score} (${analysis.phase})`, {
         reasoning: analysis.reasoning,

@@ -7,6 +7,8 @@ import { hostname, userInfo } from "node:os"
 
 export function generateNodeId(): string {
   const user = userInfo().username
-  const machine = hostname().toLowerCase().replace(/\.local$/, "")
+  const machine = hostname()
+    .toLowerCase()
+    .replace(/\.local$/, "")
   return `${user}:${machine}`
 }

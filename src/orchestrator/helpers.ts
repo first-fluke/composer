@@ -6,9 +6,10 @@ import type { Issue, RunAttempt } from "../domain/models"
 
 export function buildWorkSummary(attempt: RunAttempt): string {
   const output = attempt.agentOutput ?? "No output captured"
-  const duration = attempt.finishedAt && attempt.startedAt
-    ? Math.round((new Date(attempt.finishedAt).getTime() - new Date(attempt.startedAt).getTime()) / 1000)
-    : 0
+  const duration =
+    attempt.finishedAt && attempt.startedAt
+      ? Math.round((new Date(attempt.finishedAt).getTime() - new Date(attempt.startedAt).getTime()) / 1000)
+      : 0
 
   return [
     `Symphony: Work completed`,
@@ -17,7 +18,7 @@ export function buildWorkSummary(attempt: RunAttempt): string {
     `**Exit code:** ${attempt.exitCode}`,
     ``,
     `### Agent Output`,
-    output.length > 4000 ? output.slice(0, 4000) + "\n...(truncated)" : output,
+    output.length > 4000 ? `${output.slice(0, 4000)}\n...(truncated)` : output,
   ].join("\n")
 }
 

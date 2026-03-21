@@ -8,7 +8,7 @@
  * - Duplicate agent.start for the same issueKey on the same node is idempotent
  */
 
-import type { LedgerEvent, TeamState, NodePresence, ActiveIssue } from "../domain/ledger"
+import type { LedgerEvent, NodePresence, TeamState } from "../domain/ledger"
 
 export function replayLedger(events: LedgerEvent[]): TeamState {
   const nodes = new Map<string, NodePresence>()
@@ -68,9 +68,7 @@ export function replayLedger(events: LedgerEvent[]): TeamState {
       case "agent.cancelled": {
         const node = nodes.get(event.nodeId)
         if (!node) break
-        node.activeIssues = node.activeIssues.filter(
-          (i) => i.issueKey !== event.payload.issueKey,
-        )
+        node.activeIssues = node.activeIssues.filter((i) => i.issueKey !== event.payload.issueKey)
         break
       }
     }

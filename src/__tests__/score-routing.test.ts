@@ -4,11 +4,11 @@
  * resolveRouteWithScore, and matchScoreTier.
  */
 
-import { describe, test, expect } from "bun:test"
-import { parseScoreFromLabels } from "../domain/models"
+import { describe, expect, test } from "bun:test"
+import type { Config } from "../config/env"
 import { resolveRouteWithScore } from "../config/routing"
 import type { Issue } from "../domain/models"
-import type { Config } from "../config/env"
+import { parseScoreFromLabels } from "../domain/models"
 
 // ── parseScoreFromLabels ──────────────────────────────────────────────
 

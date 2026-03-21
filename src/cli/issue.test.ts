@@ -1,5 +1,5 @@
-import { describe, it, expect } from "bun:test"
-import { parseIssueInput, parseExpandedIssue } from "./issue"
+import { describe, expect, it } from "bun:test"
+import { parseExpandedIssue, parseIssueInput } from "./issue"
 
 describe("parseIssueInput", () => {
   it("splits title and description on newline", () => {

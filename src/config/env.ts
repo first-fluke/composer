@@ -4,36 +4,41 @@
  */
 
 import { z } from "zod/v4"
+import { detectHardware } from "./hardware"
 
 const routingRuleSchema = z.object({
   label: z.string().min(1, "Each routing rule must have a non-empty label"),
-  workspaceRoot: z.string().min(1).refine(
-    (v) => v.startsWith("/"),
-    "workspaceRoot in routing rule must be an absolute path"
-  ),
+  workspaceRoot: z
+    .string()
+    .min(1)
+    .refine((v) => v.startsWith("/"), "workspaceRoot in routing rule must be an absolute path"),
   agentType: z.enum(["claude", "codex", "gemini"]).optional(),
   deliveryMode: z.enum(["merge", "pr"]).optional(),
 })
 
 export type RoutingRule = z.infer<typeof routingRuleSchema>
 
-const scoreRoutingTierSchema = z.object({
-  min: z.number().int().min(1).max(10),
-  max: z.number().int().min(1).max(10),
-  agent: z.enum(["claude", "codex", "gemini"]),
-}).refine(
-  (v) => v.min <= v.max,
-  "Each score tier must have min <= max.\n  Fix: Ensure min is less than or equal to max in SCORE_ROUTING"
-)
+const scoreRoutingTierSchema = z
+  .object({
+    min: z.number().int().min(1).max(10),
+    max: z.number().int().min(1).max(10),
+    agent: z.enum(["claude", "codex", "gemini"]),
+  })
+  .refine(
+    (v) => v.min <= v.max,
+    "Each score tier must have min <= max.\n  Fix: Ensure min is less than or equal to max in SCORE_ROUTING",
+  )
 
-const scoreRoutingSchema = z.object({
-  easy: scoreRoutingTierSchema,
-  medium: scoreRoutingTierSchema,
-  hard: scoreRoutingTierSchema,
-}).refine(
-  (v) => v.easy.max < v.medium.min && v.medium.max < v.hard.min,
-  "Score tiers must not overlap.\n  Fix: Ensure easy.max < medium.min and medium.max < hard.min in SCORE_ROUTING"
-)
+const scoreRoutingSchema = z
+  .object({
+    easy: scoreRoutingTierSchema,
+    medium: scoreRoutingTierSchema,
+    hard: scoreRoutingTierSchema,
+  })
+  .refine(
+    (v) => v.easy.max < v.medium.min && v.medium.max < v.hard.min,
+    "Score tiers must not overlap.\n  Fix: Ensure easy.max < medium.min and medium.max < hard.min in SCORE_ROUTING",
+  )
 
 export type ScoreRoutingConfig = z.infer<typeof scoreRoutingSchema>
 
@@ -41,19 +46,35 @@ const configSchema = z.object({
   linearApiKey: z.string().min(1, "LINEAR_API_KEY is not set.\n  Fix: Add LINEAR_API_KEY=lin_api_xxx to .env"),
   linearTeamId: z.string().min(1, "LINEAR_TEAM_ID is not set.\n  Fix: Add LINEAR_TEAM_ID=ACR to .env"),
   linearTeamUuid: z.string().min(1, "LINEAR_TEAM_UUID is not set.\n  Fix: Add LINEAR_TEAM_UUID=xxx to .env"),
-  linearWebhookSecret: z.string().min(1, "LINEAR_WEBHOOK_SECRET is not set.\n  Fix: Add LINEAR_WEBHOOK_SECRET=whsec_xxx to .env"),
+  linearWebhookSecret: z
+    .string()
+    .min(1, "LINEAR_WEBHOOK_SECRET is not set.\n  Fix: Add LINEAR_WEBHOOK_SECRET=whsec_xxx to .env"),
   workflowStates: z.object({
-    todo: z.string().min(1, "LINEAR_WORKFLOW_STATE_TODO is not set.\n  Fix: Add LINEAR_WORKFLOW_STATE_TODO=<uuid> to .env"),
-    inProgress: z.string().min(1, "LINEAR_WORKFLOW_STATE_IN_PROGRESS is not set.\n  Fix: Add LINEAR_WORKFLOW_STATE_IN_PROGRESS=<uuid> to .env"),
-    done: z.string().min(1, "LINEAR_WORKFLOW_STATE_DONE is not set.\n  Fix: Add LINEAR_WORKFLOW_STATE_DONE=<uuid> to .env"),
-    cancelled: z.string().min(1, "LINEAR_WORKFLOW_STATE_CANCELLED is not set.\n  Fix: Add LINEAR_WORKFLOW_STATE_CANCELLED=<uuid> to .env"),
+    todo: z
+      .string()
+      .min(1, "LINEAR_WORKFLOW_STATE_TODO is not set.\n  Fix: Add LINEAR_WORKFLOW_STATE_TODO=<uuid> to .env"),
+    inProgress: z
+      .string()
+      .min(
+        1,
+        "LINEAR_WORKFLOW_STATE_IN_PROGRESS is not set.\n  Fix: Add LINEAR_WORKFLOW_STATE_IN_PROGRESS=<uuid> to .env",
+      ),
+    done: z
+      .string()
+      .min(1, "LINEAR_WORKFLOW_STATE_DONE is not set.\n  Fix: Add LINEAR_WORKFLOW_STATE_DONE=<uuid> to .env"),
+    cancelled: z
+      .string()
+      .min(1, "LINEAR_WORKFLOW_STATE_CANCELLED is not set.\n  Fix: Add LINEAR_WORKFLOW_STATE_CANCELLED=<uuid> to .env"),
   }),
-  workspaceRoot: z.string().min(1, "WORKSPACE_ROOT is not set.").refine(
-    (v) => v.startsWith("/"),
-    "WORKSPACE_ROOT must be an absolute path.\n  Fix: Set WORKSPACE_ROOT=/absolute/path in .env"
-  ),
+  workspaceRoot: z
+    .string()
+    .min(1, "WORKSPACE_ROOT is not set.")
+    .refine(
+      (v) => v.startsWith("/"),
+      "WORKSPACE_ROOT must be an absolute path.\n  Fix: Set WORKSPACE_ROOT=/absolute/path in .env",
+    ),
   agentType: z.enum(["claude", "codex", "gemini"], {
-    message: 'AGENT_TYPE must be "claude", "codex", or "gemini".\n  Fix: Set AGENT_TYPE=claude in .env'
+    message: 'AGENT_TYPE must be "claude", "codex", or "gemini".\n  Fix: Set AGENT_TYPE=claude in .env',
   }),
   agentTimeout: z.number().min(30, "agent timeout must be >= 30 seconds"),
   agentMaxRetries: z.number().min(1),
@@ -87,9 +108,11 @@ function parseScoreRouting(raw: string | undefined): z.infer<typeof scoreRouting
     if (!result.success) {
       const issues = result.error.issues.map((e) => `  - ${e.path.join(".")}: ${e.message}`).join("\n")
       console.error(
-        "SCORE_ROUTING validation failed:\n" + issues + "\n" +
-        '  Fix: Set SCORE_ROUTING=\'{"easy":{"min":1,"max":3,"agent":"gemini"},"medium":{"min":4,"max":7,"agent":"codex"},"hard":{"min":8,"max":10,"agent":"claude"}}\' in .env\n' +
-        "  Or remove SCORE_ROUTING to disable score-based routing."
+        "SCORE_ROUTING validation failed:\n" +
+          issues +
+          "\n" +
+          '  Fix: Set SCORE_ROUTING=\'{"easy":{"min":1,"max":3,"agent":"gemini"},"medium":{"min":4,"max":7,"agent":"codex"},"hard":{"min":8,"max":10,"agent":"claude"}}\' in .env\n' +
+          "  Or remove SCORE_ROUTING to disable score-based routing.",
       )
       return process.exit(1)
     }
@@ -97,8 +120,8 @@ function parseScoreRouting(raw: string | undefined): z.infer<typeof scoreRouting
   } catch {
     console.error(
       "SCORE_ROUTING is not valid JSON.\n" +
-      '  Fix: Set SCORE_ROUTING=\'{"easy":{"min":1,"max":3,"agent":"gemini"},...}\' in .env\n' +
-      "  Or remove SCORE_ROUTING to disable score-based routing."
+        '  Fix: Set SCORE_ROUTING=\'{"easy":{"min":1,"max":3,"agent":"gemini"},...}\' in .env\n' +
+        "  Or remove SCORE_ROUTING to disable score-based routing.",
     )
     return process.exit(1)
   }
@@ -111,8 +134,8 @@ function parseRoutingRules(raw: string | undefined): RoutingRule[] {
   } catch {
     console.error(
       "ROUTING_RULES is not valid JSON.\n" +
-      '  Fix: Set ROUTING_RULES=\'[{"label":"backend","workspaceRoot":"/path/to/repo"}]\' in .env\n' +
-      "  Or remove ROUTING_RULES to use the default WORKSPACE_ROOT for all issues."
+        '  Fix: Set ROUTING_RULES=\'[{"label":"backend","workspaceRoot":"/path/to/repo"}]\' in .env\n' +
+        "  Or remove ROUTING_RULES to use the default WORKSPACE_ROOT for all issues.",
     )
     return process.exit(1)
   }
@@ -137,7 +160,7 @@ export function loadConfig(): Config {
     agentTimeout: Number(env.AGENT_TIMEOUT ?? "3600"),
     agentMaxRetries: Number(env.AGENT_MAX_RETRIES ?? "3"),
     agentRetryDelay: Number(env.AGENT_RETRY_DELAY ?? "60"),
-    maxParallel: Number(env.MAX_PARALLEL ?? "5"),
+    maxParallel: Number(env.MAX_PARALLEL || detectHardware().recommended),
     serverPort: Number(env.SERVER_PORT ?? "9741"),
     logLevel: (env.LOG_LEVEL ?? "info") as "debug" | "info" | "warn" | "error",
     logFormat: (env.LOG_FORMAT ?? "json") as "json" | "text",
@@ -155,7 +178,9 @@ export function loadConfig(): Config {
 
   if (!result.success) {
     const issues = result.error.issues.map((e, i) => `  [${i + 1}] ${e.path.join(".")}: ${e.message}`).join("\n")
-    console.error(`Config validation failed. Fix the following issues and restart:\n\n${issues}\n\nSymphony cannot start until all config errors are resolved.`)
+    console.error(
+      `Config validation failed. Fix the following issues and restart:\n\n${issues}\n\nSymphony cannot start until all config errors are resolved.`,
+    )
     process.exit(1)
   }
 

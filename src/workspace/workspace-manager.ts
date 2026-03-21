@@ -5,8 +5,8 @@
  */
 
 import { spawn } from "node:child_process"
-import { readdir, readFile, mkdir, writeFile, rm } from "node:fs/promises"
-import type { Issue, Workspace, RunAttempt } from "../domain/models"
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises"
+import type { Issue, RunAttempt, Workspace } from "../domain/models"
 import { logger } from "../observability/logger"
 
 /** Run a command and return its exit code + stderr text. */
@@ -37,7 +37,7 @@ function runCommand(
 export class WorkspaceManager {
   constructor(
     private rootPath: string,
-    private retentionDays: number = 7,
+    _retentionDays: number = 7,
   ) {}
 
   deriveKey(identifier: string): string {
@@ -51,11 +51,7 @@ export class WorkspaceManager {
     const branch = `symphony/${key}`
 
     // Create git worktree from the target repo
-    const { exitCode, stderr } = await runCommand(
-      "git",
-      ["worktree", "add", path, "-b", branch],
-      { cwd: root },
-    )
+    const { exitCode, stderr } = await runCommand("git", ["worktree", "add", path, "-b", branch], { cwd: root })
 
     if (exitCode !== 0) {
       // Worktree might already exist — try reusing
@@ -132,26 +128,19 @@ export class WorkspaceManager {
     const branch = `symphony/${workspace.key}`
 
     // Check if branch has any commits ahead of main
-    const { exitCode: diffExit } = await runCommand(
-      "git", ["diff", "--quiet", `main...${branch}`],
-      { cwd: root },
-    )
+    const { exitCode: diffExit } = await runCommand("git", ["diff", "--quiet", `main...${branch}`], { cwd: root })
     if (diffExit === 0) {
       logger.info("workspace-manager", "No changes to merge", { branch })
       return { ok: true }
     }
 
     // Merge branch into main (rerere handles conflict resolution)
-    const { exitCode: mergeExit, stderr: mergeErr } = await runCommand(
-      "git", ["merge", branch, "--no-edit"],
-      { cwd: root },
-    )
+    const { exitCode: mergeExit, stderr: mergeErr } = await runCommand("git", ["merge", branch, "--no-edit"], {
+      cwd: root,
+    })
     if (mergeExit !== 0) {
       // rerere might have resolved, check for remaining conflicts
-      const { exitCode: conflictCheck } = await runCommand(
-        "git", ["diff", "--check"],
-        { cwd: root },
-      )
+      const { exitCode: conflictCheck } = await runCommand("git", ["diff", "--check"], { cwd: root })
       if (conflictCheck !== 0) {
         await runCommand("git", ["merge", "--abort"], { cwd: root })
         logger.error("workspace-manager", "Merge failed with unresolved conflicts", { branch, error: mergeErr })
@@ -162,15 +151,9 @@ export class WorkspaceManager {
     }
 
     // Push main (if remote exists)
-    const { exitCode: remoteCheck } = await runCommand(
-      "git", ["remote", "get-url", "origin"],
-      { cwd: root },
-    )
+    const { exitCode: remoteCheck } = await runCommand("git", ["remote", "get-url", "origin"], { cwd: root })
     if (remoteCheck === 0) {
-      const { exitCode: pushExit, stderr: pushErr } = await runCommand(
-        "git", ["push", "origin", "main"],
-        { cwd: root },
-      )
+      const { exitCode: pushExit, stderr: pushErr } = await runCommand("git", ["push", "origin", "main"], { cwd: root })
       if (pushExit !== 0) {
         logger.error("workspace-manager", "Push failed", { error: pushErr })
         return { ok: false, error: `Push failed: ${pushErr}` }
@@ -192,6 +175,9 @@ export class WorkspaceManager {
     // Remove directory if it still exists
     await rm(workspace.path, { recursive: true, force: true })
 
-    logger.info("workspace-manager", "Workspace cleaned up", { issueId: workspace.issueId, workspacePath: workspace.path })
+    logger.info("workspace-manager", "Workspace cleaned up", {
+      issueId: workspace.issueId,
+      workspacePath: workspace.path,
+    })
   }
 }

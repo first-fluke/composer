@@ -1,9 +1,9 @@
 /**
  * SessionFactory tests — registry, creation, error messages.
  */
-import { describe, test, expect, beforeEach } from "bun:test"
-import { SessionRegistry } from "../sessions/session-factory.ts"
+import { beforeEach, describe, expect, test } from "bun:test"
 import type { AgentSession } from "../sessions/agent-session.ts"
+import { SessionRegistry } from "../sessions/session-factory.ts"
 
 /** Minimal mock session for testing the registry. */
 function mockSession(): AgentSession {

@@ -34,8 +34,8 @@ export class SessionRegistry {
       const available = Array.from(this.registry.keys()).join(", ") || "(none)"
       throw new Error(
         `Unknown agent type: "${type}". ` +
-        `Available: ${available}. ` +
-        `Register custom agents via registerSession("${type}", () => new YourSession())`
+          `Available: ${available}. ` +
+          `Register custom agents via registerSession("${type}", () => new YourSession())`,
       )
     }
     return constructor()

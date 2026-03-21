@@ -10,8 +10,8 @@
  */
 
 import { spawn } from "node:child_process"
-import { BaseSession, buildAgentEnv, waitForExit } from "./base-session"
 import type { AgentConfig } from "./agent-session"
+import { BaseSession, buildAgentEnv } from "./base-session"
 
 export class ClaudeSession extends BaseSession {
   private output = ""
@@ -35,7 +35,8 @@ export class ClaudeSession extends BaseSession {
 
     const args = [
       "--print",
-      "--output-format", "stream-json",
+      "--output-format",
+      "stream-json",
       "--verbose",
       "--dangerously-skip-permissions",
       "--no-session-persistence",
@@ -57,8 +58,8 @@ export class ClaudeSession extends BaseSession {
       stdio: ["pipe", "pipe", "pipe"],
     })
 
-    this.process.stdin!.write(prompt, "utf-8")
-    this.process.stdin!.end()
+    this.process.stdin?.write(prompt, "utf-8")
+    this.process.stdin?.end()
 
     await this.readStream()
   }
@@ -106,11 +107,7 @@ export class ClaudeSession extends BaseSession {
 
         // If we haven't emitted a complete event from the "result" message, emit now
         if (exitCode !== 0) {
-          this.emitError(
-            exitCode === -1 ? "TIMEOUT" : "CRASH",
-            `claude exited with code ${exitCode}`,
-            exitCode !== 1,
-          )
+          this.emitError(exitCode === -1 ? "TIMEOUT" : "CRASH", `claude exited with code ${exitCode}`, exitCode !== 1)
         }
 
         resolve()
@@ -122,23 +119,23 @@ export class ClaudeSession extends BaseSession {
     if (typeof event !== "object" || event === null) return
     const e = event as Record<string, unknown>
 
-    switch (e["type"]) {
+    switch (e.type) {
       case "assistant": {
-        const msg = e["message"] as Record<string, unknown> | undefined
-        const content = msg?.["content"] as Array<Record<string, unknown>> | undefined
+        const msg = e.message as Record<string, unknown> | undefined
+        const content = msg?.content as Array<Record<string, unknown>> | undefined
         if (Array.isArray(content)) {
           for (const block of content) {
-            if (block["type"] === "text" && typeof block["text"] === "string") {
-              this.output += block["text"]
-              this.emit({ type: "output", chunk: block["text"] })
+            if (block.type === "text" && typeof block.text === "string") {
+              this.output += block.text
+              this.emit({ type: "output", chunk: block.text })
             }
-            if (block["type"] === "tool_use") {
-              const toolName = (block["name"] as string | undefined) ?? "unknown"
-              const input = block["input"] as Record<string, unknown> | undefined
+            if (block.type === "tool_use") {
+              const toolName = (block.name as string | undefined) ?? "unknown"
+              const input = block.input as Record<string, unknown> | undefined
               this.emit({ type: "toolUse", tool: toolName, args: input ?? {} })
 
               if (toolName === "Edit" || toolName === "Write") {
-                const path = input?.["file_path"] as string | undefined
+                const path = input?.file_path as string | undefined
                 if (path && !this.filesChanged.includes(path)) {
                   this.filesChanged.push(path)
                   this.emit({
@@ -153,7 +150,7 @@ export class ClaudeSession extends BaseSession {
         }
 
         // Token usage from message
-        const usage = msg?.["usage"] as Record<string, unknown> | undefined
+        const usage = msg?.usage as Record<string, unknown> | undefined
         if (usage) {
           this.emit({ type: "heartbeat", timestamp: new Date().toISOString() })
         }
@@ -161,9 +158,9 @@ export class ClaudeSession extends BaseSession {
       }
 
       case "result": {
-        const result = (e["result"] as string | undefined) ?? this.output
-        const durationMs = (e["duration_ms"] as number | undefined) ?? this.elapsedMs()
-        const isError = e["is_error"] === true
+        const result = (e.result as string | undefined) ?? this.output
+        const durationMs = (e.duration_ms as number | undefined) ?? this.elapsedMs()
+        const isError = e.is_error === true
 
         if (isError) {
           this.emitError("CRASH", result, true)
@@ -190,10 +187,10 @@ export class ClaudeSession extends BaseSession {
   }
 
   private extractTokenUsage(resultEvent: Record<string, unknown>): { input: number; output: number } | undefined {
-    const usage = resultEvent["usage"] as Record<string, unknown> | undefined
+    const usage = resultEvent.usage as Record<string, unknown> | undefined
     if (!usage) return undefined
-    const input = (usage["input_tokens"] as number | undefined) ?? 0
-    const output = (usage["output_tokens"] as number | undefined) ?? 0
+    const input = (usage.input_tokens as number | undefined) ?? 0
+    const output = (usage.output_tokens as number | undefined) ?? 0
     return { input, output }
   }
 }

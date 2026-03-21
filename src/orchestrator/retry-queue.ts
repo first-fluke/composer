@@ -15,16 +15,19 @@ export class RetryQueue {
 
   add(issueId: string, attemptCount: number, lastError: string): boolean {
     if (attemptCount >= this.maxAttempts) {
-      logger.error("orchestrator", `Max retry attempts reached for issue`, { issueId, attemptCount: String(attemptCount) })
+      logger.error("orchestrator", `Max retry attempts reached for issue`, {
+        issueId,
+        attemptCount: String(attemptCount),
+      })
       return false
     }
 
     // Dedup: if already in queue, update instead of adding
-    const existing = this.queue.find(e => e.issueId === issueId)
+    const existing = this.queue.find((e) => e.issueId === issueId)
     if (existing) {
       existing.attemptCount = Math.max(existing.attemptCount, attemptCount)
       existing.lastError = lastError
-      const delay = this.backoffSec * Math.pow(2, existing.attemptCount - 1)
+      const delay = this.backoffSec * 2 ** (existing.attemptCount - 1)
       existing.nextRetryAt = new Date(Date.now() + delay * 1000).toISOString()
 
       logger.warn("orchestrator", "Retry updated (dedup)", {
@@ -36,7 +39,7 @@ export class RetryQueue {
       return true
     }
 
-    const delay = this.backoffSec * Math.pow(2, attemptCount - 1)
+    const delay = this.backoffSec * 2 ** (attemptCount - 1)
     const nextRetryAt = new Date(Date.now() + delay * 1000).toISOString()
 
     this.queue.push({ issueId, attemptCount, nextRetryAt, lastError })

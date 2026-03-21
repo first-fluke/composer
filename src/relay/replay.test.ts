@@ -1,6 +1,6 @@
-import { describe, test, expect } from "bun:test"
-import { replayLedger } from "./replay"
+import { describe, expect, test } from "bun:test"
 import type { LedgerEvent } from "../domain/ledger"
+import { replayLedger } from "./replay"
 
 function makeEvent(partial: Partial<LedgerEvent> & Pick<LedgerEvent, "type" | "payload">): LedgerEvent {
   return {
@@ -38,8 +38,16 @@ describe("replayLedger", () => {
 
   test("agent.start adds active issue", () => {
     const events: LedgerEvent[] = [
-      makeEvent({ seq: 1, type: "node.join", payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" } }),
-      makeEvent({ seq: 2, type: "agent.start", payload: { agentType: "claude", issueKey: "FIR-12", issueId: "id-12" } }),
+      makeEvent({
+        seq: 1,
+        type: "node.join",
+        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" },
+      }),
+      makeEvent({
+        seq: 2,
+        type: "agent.start",
+        payload: { agentType: "claude", issueKey: "FIR-12", issueId: "id-12" },
+      }),
     ]
     const state = replayLedger(events)
     const node = state.nodes.get("gahyun:macbook")!
@@ -49,8 +57,16 @@ describe("replayLedger", () => {
 
   test("agent.done removes active issue", () => {
     const events: LedgerEvent[] = [
-      makeEvent({ seq: 1, type: "node.join", payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" } }),
-      makeEvent({ seq: 2, type: "agent.start", payload: { agentType: "claude", issueKey: "FIR-12", issueId: "id-12" } }),
+      makeEvent({
+        seq: 1,
+        type: "node.join",
+        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" },
+      }),
+      makeEvent({
+        seq: 2,
+        type: "agent.start",
+        payload: { agentType: "claude", issueKey: "FIR-12", issueId: "id-12" },
+      }),
       makeEvent({ seq: 3, type: "agent.done", payload: { issueKey: "FIR-12", issueId: "id-12", durationMs: 5000 } }),
     ]
     const state = replayLedger(events)
@@ -60,9 +76,21 @@ describe("replayLedger", () => {
 
   test("node.leave clears all active issues", () => {
     const events: LedgerEvent[] = [
-      makeEvent({ seq: 1, type: "node.join", payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" } }),
-      makeEvent({ seq: 2, type: "agent.start", payload: { agentType: "claude", issueKey: "FIR-12", issueId: "id-12" } }),
-      makeEvent({ seq: 3, type: "agent.start", payload: { agentType: "claude", issueKey: "FIR-15", issueId: "id-15" } }),
+      makeEvent({
+        seq: 1,
+        type: "node.join",
+        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" },
+      }),
+      makeEvent({
+        seq: 2,
+        type: "agent.start",
+        payload: { agentType: "claude", issueKey: "FIR-12", issueId: "id-12" },
+      }),
+      makeEvent({
+        seq: 3,
+        type: "agent.start",
+        payload: { agentType: "claude", issueKey: "FIR-15", issueId: "id-15" },
+      }),
       makeEvent({ seq: 4, type: "node.leave", payload: { reason: "crash" } }),
     ]
     const state = replayLedger(events)
@@ -73,9 +101,21 @@ describe("replayLedger", () => {
 
   test("duplicate agent.start is idempotent", () => {
     const events: LedgerEvent[] = [
-      makeEvent({ seq: 1, type: "node.join", payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" } }),
-      makeEvent({ seq: 2, type: "agent.start", payload: { agentType: "claude", issueKey: "FIR-12", issueId: "id-12" } }),
-      makeEvent({ seq: 3, type: "agent.start", payload: { agentType: "claude", issueKey: "FIR-12", issueId: "id-12" } }),
+      makeEvent({
+        seq: 1,
+        type: "node.join",
+        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" },
+      }),
+      makeEvent({
+        seq: 2,
+        type: "agent.start",
+        payload: { agentType: "claude", issueKey: "FIR-12", issueId: "id-12" },
+      }),
+      makeEvent({
+        seq: 3,
+        type: "agent.start",
+        payload: { agentType: "claude", issueKey: "FIR-12", issueId: "id-12" },
+      }),
     ]
     const state = replayLedger(events)
     const node = state.nodes.get("gahyun:macbook")!
@@ -84,7 +124,11 @@ describe("replayLedger", () => {
 
   test("agent.done without prior start is harmless", () => {
     const events: LedgerEvent[] = [
-      makeEvent({ seq: 1, type: "node.join", payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" } }),
+      makeEvent({
+        seq: 1,
+        type: "node.join",
+        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" },
+      }),
       makeEvent({ seq: 2, type: "agent.done", payload: { issueKey: "FIR-99", issueId: "id-99", durationMs: 1000 } }),
     ]
     const state = replayLedger(events)
@@ -94,21 +138,45 @@ describe("replayLedger", () => {
 
   test("multiple nodes", () => {
     const events: LedgerEvent[] = [
-      makeEvent({ seq: 1, nodeId: "gahyun:macbook", type: "node.join", payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" } }),
-      makeEvent({ seq: 2, nodeId: "eungwang:desktop", type: "node.join", payload: { defaultAgentType: "gemini", maxParallel: 2, displayName: "은광" } }),
-      makeEvent({ seq: 3, nodeId: "gahyun:macbook", type: "agent.start", payload: { agentType: "claude", issueKey: "FIR-12", issueId: "id-12" } }),
-      makeEvent({ seq: 4, nodeId: "eungwang:desktop", type: "agent.start", payload: { agentType: "gemini", issueKey: "FIR-18", issueId: "id-18" } }),
+      makeEvent({
+        seq: 1,
+        nodeId: "gahyun:macbook",
+        type: "node.join",
+        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" },
+      }),
+      makeEvent({
+        seq: 2,
+        nodeId: "eungwang:desktop",
+        type: "node.join",
+        payload: { defaultAgentType: "gemini", maxParallel: 2, displayName: "은광" },
+      }),
+      makeEvent({
+        seq: 3,
+        nodeId: "gahyun:macbook",
+        type: "agent.start",
+        payload: { agentType: "claude", issueKey: "FIR-12", issueId: "id-12" },
+      }),
+      makeEvent({
+        seq: 4,
+        nodeId: "eungwang:desktop",
+        type: "agent.start",
+        payload: { agentType: "gemini", issueKey: "FIR-18", issueId: "id-18" },
+      }),
     ]
     const state = replayLedger(events)
     expect(state.nodes.size).toBe(2)
-    expect(state.nodes.get("gahyun:macbook")!.activeIssues).toHaveLength(1)
-    expect(state.nodes.get("eungwang:desktop")!.activeIssues).toHaveLength(1)
+    expect(state.nodes.get("gahyun:macbook")?.activeIssues).toHaveLength(1)
+    expect(state.nodes.get("eungwang:desktop")?.activeIssues).toHaveLength(1)
     expect(state.lastSeq).toBe(4)
   })
 
   test("node.reconnect sets online back to true", () => {
     const events: LedgerEvent[] = [
-      makeEvent({ seq: 1, type: "node.join", payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" } }),
+      makeEvent({
+        seq: 1,
+        type: "node.join",
+        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" },
+      }),
       makeEvent({ seq: 2, type: "node.leave", payload: { reason: "timeout" } }),
       makeEvent({ seq: 3, type: "node.reconnect", payload: { lastSeq: 2 } }),
     ]
@@ -119,7 +187,11 @@ describe("replayLedger", () => {
 
   test("tracks lastSeq correctly with gaps", () => {
     const events: LedgerEvent[] = [
-      makeEvent({ seq: 10, type: "node.join", payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" } }),
+      makeEvent({
+        seq: 10,
+        type: "node.join",
+        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" },
+      }),
       makeEvent({ seq: 42, type: "agent.start", payload: { agentType: "claude", issueKey: "FIR-1", issueId: "id-1" } }),
     ]
     const state = replayLedger(events)
@@ -128,9 +200,25 @@ describe("replayLedger", () => {
 
   test("agent.failed removes active issue", () => {
     const events: LedgerEvent[] = [
-      makeEvent({ seq: 1, type: "node.join", payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" } }),
-      makeEvent({ seq: 2, type: "agent.start", payload: { agentType: "claude", issueKey: "FIR-12", issueId: "id-12" } }),
-      makeEvent({ seq: 3, type: "agent.failed", payload: { issueKey: "FIR-12", issueId: "id-12", error: { code: "TIMEOUT", message: "timed out", retryable: true } } }),
+      makeEvent({
+        seq: 1,
+        type: "node.join",
+        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" },
+      }),
+      makeEvent({
+        seq: 2,
+        type: "agent.start",
+        payload: { agentType: "claude", issueKey: "FIR-12", issueId: "id-12" },
+      }),
+      makeEvent({
+        seq: 3,
+        type: "agent.failed",
+        payload: {
+          issueKey: "FIR-12",
+          issueId: "id-12",
+          error: { code: "TIMEOUT", message: "timed out", retryable: true },
+        },
+      }),
     ]
     const state = replayLedger(events)
     const node = state.nodes.get("gahyun:macbook")!

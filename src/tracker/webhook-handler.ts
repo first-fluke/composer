@@ -3,27 +3,19 @@
  */
 
 import { z } from "zod/v4"
-import { parseScoreFromLabels } from "../domain/models"
 import type { Issue } from "../domain/models"
-import type { WebhookEvent } from "./types"
+import { parseScoreFromLabels } from "../domain/models"
 import { logger } from "../observability/logger"
+import type { WebhookEvent } from "./types"
 
 /**
  * Verify HMAC-SHA256 webhook signature.
  */
-export async function verifyWebhookSignature(
-  payload: string,
-  signature: string,
-  secret: string,
-): Promise<boolean> {
+export async function verifyWebhookSignature(payload: string, signature: string, secret: string): Promise<boolean> {
   const encoder = new TextEncoder()
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  )
+  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [
+    "sign",
+  ])
   const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(payload))
   const expected = Buffer.from(sig).toString("hex")
 
@@ -47,23 +39,34 @@ const webhookPayloadSchema = z.object({
     title: z.string().optional().default(""),
     description: z.string().nullable().optional().default(""),
     url: z.string().optional().default(""),
-    state: z.object({
-      id: z.string(),
-      name: z.string().optional().default(""),
-      type: z.string().optional().default(""),
-    }).optional(),
-    team: z.object({
-      id: z.string().optional().default(""),
-      key: z.string().optional().default(""),
-    }).optional(),
-    labels: z.array(z.object({
-      id: z.string(),
-      name: z.string(),
-    })).optional().default([]),
+    state: z
+      .object({
+        id: z.string(),
+        name: z.string().optional().default(""),
+        type: z.string().optional().default(""),
+      })
+      .optional(),
+    team: z
+      .object({
+        id: z.string().optional().default(""),
+        key: z.string().optional().default(""),
+      })
+      .optional(),
+    labels: z
+      .array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+        }),
+      )
+      .optional()
+      .default([]),
   }),
-  updatedFrom: z.object({
-    stateId: z.string(),
-  }).optional(),
+  updatedFrom: z
+    .object({
+      stateId: z.string(),
+    })
+    .optional(),
 })
 
 /**

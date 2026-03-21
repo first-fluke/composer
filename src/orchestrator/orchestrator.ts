@@ -4,20 +4,25 @@
  * Sole authority over in-memory runtime state.
  */
 
-import { readFile, access } from "node:fs/promises"
+import { access, readFile } from "node:fs/promises"
 import type { Config } from "../config/env"
-import type { Issue, Workspace, RunAttempt, OrchestratorRuntimeState } from "../domain/models"
-import type { WebhookEvent } from "../tracker/types"
-import { fetchIssuesByState, fetchIssueLabels, updateIssueState, addIssueComment, addIssueLabel } from "../tracker/linear-client"
-import { verifyWebhookSignature, parseWebhookEvent } from "../tracker/webhook-handler"
+import { resolveRouteWithScore } from "../config/routing"
+import { parseWorkflow, renderPrompt } from "../config/workflow-loader"
+import type { Issue, OrchestratorRuntimeState, RunAttempt, Workspace } from "../domain/models"
+import { logger } from "../observability/logger"
+import {
+  addIssueComment,
+  addIssueLabel,
+  fetchIssueLabels,
+  fetchIssuesByState,
+  updateIssueState,
+} from "../tracker/linear-client"
+import { parseWebhookEvent, verifyWebhookSignature } from "../tracker/webhook-handler"
 import { WorkspaceManager } from "../workspace/workspace-manager"
 import { AgentRunnerService } from "./agent-runner"
-import { RetryQueue } from "./retry-queue"
-import { parseWorkflow, renderPrompt } from "../config/workflow-loader"
-import { resolveRouteWithScore } from "../config/routing"
-import { analyzeScoreInBackground } from "./scoring-service"
 import { buildWorkSummary, sortByIssueNumber } from "./helpers"
-import { logger } from "../observability/logger"
+import { RetryQueue } from "./retry-queue"
+import { analyzeScoreInBackground } from "./scoring-service"
 
 type OrchestratorEventHandler = (...args: any[]) => void
 
@@ -75,12 +80,14 @@ export class Orchestrator {
     this.state.isRunning = true
 
     // Load WORKFLOW.md prompt template
-    const workflowExists = await access("WORKFLOW.md").then(() => true).catch(() => false)
+    const workflowExists = await access("WORKFLOW.md")
+      .then(() => true)
+      .catch(() => false)
     if (!workflowExists) {
       throw new Error(
         "WORKFLOW.md not found in project root.\n" +
-        "  Fix: Create WORKFLOW.md with YAML front matter (--- delimited) and a prompt template body.\n" +
-        "  See AGENTS.md for the expected format."
+          "  Fix: Create WORKFLOW.md with YAML front matter (--- delimited) and a prompt template body.\n" +
+          "  See AGENTS.md for the expected format.",
       )
     }
     const workflowContent = await readFile("WORKFLOW.md", "utf-8")
@@ -152,11 +159,10 @@ export class Orchestrator {
   // ── Startup Sync ──────────────────────────────────────────────────────
 
   private async startupSync(): Promise<void> {
-    const issues = await fetchIssuesByState(
-      this.config.linearApiKey,
-      this.config.linearTeamUuid,
-      [this.config.workflowStates.todo, this.config.workflowStates.inProgress],
-    )
+    const issues = await fetchIssuesByState(this.config.linearApiKey, this.config.linearTeamUuid, [
+      this.config.workflowStates.todo,
+      this.config.workflowStates.inProgress,
+    ])
 
     sortByIssueNumber(issues)
     logger.info("orchestrator", `Startup sync completed, found ${issues.length} issues`)
@@ -177,11 +183,9 @@ export class Orchestrator {
     if (available <= 0) return
 
     try {
-      const issues = await fetchIssuesByState(
-        this.config.linearApiKey,
-        this.config.linearTeamUuid,
-        [this.config.workflowStates.todo],
-      )
+      const issues = await fetchIssuesByState(this.config.linearApiKey, this.config.linearTeamUuid, [
+        this.config.workflowStates.todo,
+      ])
 
       sortByIssueNumber(issues)
 
@@ -281,11 +285,7 @@ export class Orchestrator {
 
     // Transition Todo -> In Progress on Linear
     try {
-      await updateIssueState(
-        this.config.linearApiKey,
-        issue.id,
-        this.config.workflowStates.inProgress,
-      )
+      await updateIssueState(this.config.linearApiKey, issue.id, this.config.workflowStates.inProgress)
       logger.info("orchestrator", `Transitioned ${issue.identifier} from Todo to In Progress`)
     } catch (err) {
       this.processingIssues.delete(issue.id)
@@ -335,7 +335,8 @@ export class Orchestrator {
         issue.labels = await fetchIssueLabels(this.config.linearApiKey, issue.id)
       } catch (err) {
         logger.warn("orchestrator", "Failed to fetch issue labels for routing, using default", {
-          issueId: issue.id, error: String(err),
+          issueId: issue.id,
+          error: String(err),
         })
       }
     }
@@ -403,135 +404,133 @@ export class Orchestrator {
     })
 
     // Spawn agent (using per-issue resolved agent type)
-    await this.agentRunner.spawn(attempt, {
-      agentType: route.agentType,
-      timeout: this.config.agentTimeout,
-      prompt,
-      workspacePath: workspace.path,
-    }, {
-      onComplete: async (completedAttempt) => {
-        const ws = this.state.activeWorkspaces.get(issue.id)
-        if (ws) ws.status = "done"
-        this.state.activeWorkspaces.delete(issue.id)
-        this.activeAttempts.delete(issue.id)
-        this.workspaceManager.saveAttempt(workspace, completedAttempt)
+    await this.agentRunner.spawn(
+      attempt,
+      {
+        agentType: route.agentType,
+        timeout: this.config.agentTimeout,
+        prompt,
+        workspacePath: workspace.path,
+      },
+      {
+        onComplete: async (completedAttempt) => {
+          const ws = this.state.activeWorkspaces.get(issue.id)
+          if (ws) ws.status = "done"
+          this.state.activeWorkspaces.delete(issue.id)
+          this.activeAttempts.delete(issue.id)
+          this.workspaceManager.saveAttempt(workspace, completedAttempt)
 
-        // Post work summary comment (best-effort -- don't block Done transition)
-        try {
-          const summary = buildWorkSummary(completedAttempt)
-          await addIssueComment(this.config.linearApiKey, issue.id, summary)
-        } catch (err) {
-          logger.warn("orchestrator", "Failed to post work summary comment", {
-            issueId: issue.id,
-            error: String(err),
-          })
-        }
-
-        // Deliver: merge directly or leave for PR review
-        if (route.deliveryMode === "merge") {
-          const mergeResult = await this.workspaceManager.mergeAndPush(workspace)
-          if (!mergeResult.ok) {
-            logger.error("orchestrator", `Merge failed for ${issue.identifier}`, { error: mergeResult.error })
-            try {
-              await addIssueComment(
-                this.config.linearApiKey,
-              issue.id,
-              `Symphony: Merge failed — manual resolution required\n\n${mergeResult.error}`,
-            )
-          } catch { /* best-effort */ }
-          }
-
-          // Cleanup worktree after merge
+          // Post work summary comment (best-effort -- don't block Done transition)
           try {
-            await this.workspaceManager.cleanup(workspace)
-          } catch (cleanupErr) {
-            logger.warn("orchestrator", "Worktree cleanup failed", { issueId: issue.id, error: String(cleanupErr) })
+            const summary = buildWorkSummary(completedAttempt)
+            await addIssueComment(this.config.linearApiKey, issue.id, summary)
+          } catch (err) {
+            logger.warn("orchestrator", "Failed to post work summary comment", {
+              issueId: issue.id,
+              error: String(err),
+            })
           }
-        }
-        // pr mode: agent already pushed branch + created PR, no merge/cleanup needed
 
-        // Transition to Done
-        try {
-          await updateIssueState(
-            this.config.linearApiKey,
-            issue.id,
-            this.config.workflowStates.done,
-          )
-        } catch (err) {
-          logger.error("orchestrator", "Failed to transition issue to Done", {
+          // Deliver: merge directly or leave for PR review
+          if (route.deliveryMode === "merge") {
+            const mergeResult = await this.workspaceManager.mergeAndPush(workspace)
+            if (!mergeResult.ok) {
+              logger.error("orchestrator", `Merge failed for ${issue.identifier}`, { error: mergeResult.error })
+              try {
+                await addIssueComment(
+                  this.config.linearApiKey,
+                  issue.id,
+                  `Symphony: Merge failed — manual resolution required\n\n${mergeResult.error}`,
+                )
+              } catch {
+                /* best-effort */
+              }
+            }
+
+            // Cleanup worktree after merge
+            try {
+              await this.workspaceManager.cleanup(workspace)
+            } catch (cleanupErr) {
+              logger.warn("orchestrator", "Worktree cleanup failed", { issueId: issue.id, error: String(cleanupErr) })
+            }
+          }
+          // pr mode: agent already pushed branch + created PR, no merge/cleanup needed
+
+          // Transition to Done
+          try {
+            await updateIssueState(this.config.linearApiKey, issue.id, this.config.workflowStates.done)
+          } catch (err) {
+            logger.error("orchestrator", "Failed to transition issue to Done", {
+              issueId: issue.id,
+              error: String(err),
+            })
+          }
+
+          this.emitEvent("agent.done", {
+            issueKey: issue.identifier,
             issueId: issue.id,
-            error: String(err),
+            durationMs: Date.now() - new Date(attempt.startedAt).getTime(),
           })
-        }
 
-        this.emitEvent("agent.done", {
-          issueKey: issue.identifier,
-          issueId: issue.id,
-          durationMs: Date.now() - new Date(attempt.startedAt).getTime(),
-        })
+          logger.info("orchestrator", `Agent completed for ${issue.identifier}`, {
+            issueId: issue.id,
+            exitCode: completedAttempt.exitCode ?? undefined,
+            durationMs: Date.now() - new Date(attempt.startedAt).getTime(),
+          })
 
-        logger.info("orchestrator", `Agent completed for ${issue.identifier}`, {
-          issueId: issue.id,
-          exitCode: completedAttempt.exitCode ?? undefined,
-          durationMs: Date.now() - new Date(attempt.startedAt).getTime(),
-        })
+          // Fill vacant slot from Todo issues
+          await this.fillVacantSlots()
+        },
+        onError: async (err) => {
+          const ws = this.state.activeWorkspaces.get(issue.id)
+          if (ws) ws.status = "failed"
+          this.state.activeWorkspaces.delete(issue.id)
+          this.activeAttempts.delete(issue.id)
 
-        // Fill vacant slot from Todo issues
-        await this.fillVacantSlots()
-      },
-      onError: async (err) => {
-        const ws = this.state.activeWorkspaces.get(issue.id)
-        if (ws) ws.status = "failed"
-        this.state.activeWorkspaces.delete(issue.id)
-        this.activeAttempts.delete(issue.id)
-
-        this.emitEvent("agent.failed", {
-          issueKey: issue.identifier,
-          issueId: issue.id,
-          error: { code: "AGENT_ERROR", message: err.message, retryable: err.recoverable },
-        })
-        logger.warn("orchestrator", `Agent failed for ${issue.identifier}`, {
-          issueId: issue.id,
-          error: err.message,
-        })
-        if (err.recoverable) {
-          const added = this.retryQueue.add(issue.id, 1, err.message)
-          if (!added) {
-            // Max retries exceeded -- cancel issue with error comment
-            try {
-              await addIssueComment(
-                this.config.linearApiKey,
-                issue.id,
-                `Symphony: Agent failed (${this.config.agentMaxRetries} retries exceeded)\n\nError: ${err.message}`,
-              )
-            } catch (commentErr) {
-              logger.warn("orchestrator", "Failed to post error comment", {
-                issueId: issue.id,
-                error: String(commentErr),
-              })
-            }
-            try {
-              await updateIssueState(
-                this.config.linearApiKey,
-                issue.id,
-                this.config.workflowStates.cancelled,
-              )
-            } catch (stateErr) {
-              logger.error("orchestrator", "Failed to transition issue to Cancelled", {
-                issueId: issue.id,
-                error: String(stateErr),
-              })
+          this.emitEvent("agent.failed", {
+            issueKey: issue.identifier,
+            issueId: issue.id,
+            error: { code: "AGENT_ERROR", message: err.message, retryable: err.recoverable },
+          })
+          logger.warn("orchestrator", `Agent failed for ${issue.identifier}`, {
+            issueId: issue.id,
+            error: err.message,
+          })
+          if (err.recoverable) {
+            const added = this.retryQueue.add(issue.id, 1, err.message)
+            if (!added) {
+              // Max retries exceeded -- cancel issue with error comment
+              try {
+                await addIssueComment(
+                  this.config.linearApiKey,
+                  issue.id,
+                  `Symphony: Agent failed (${this.config.agentMaxRetries} retries exceeded)\n\nError: ${err.message}`,
+                )
+              } catch (commentErr) {
+                logger.warn("orchestrator", "Failed to post error comment", {
+                  issueId: issue.id,
+                  error: String(commentErr),
+                })
+              }
+              try {
+                await updateIssueState(this.config.linearApiKey, issue.id, this.config.workflowStates.cancelled)
+              } catch (stateErr) {
+                logger.error("orchestrator", "Failed to transition issue to Cancelled", {
+                  issueId: issue.id,
+                  error: String(stateErr),
+                })
+              }
             }
           }
-        }
 
-        // Fill vacant slot from Todo issues
-        await this.fillVacantSlots()
+          // Fill vacant slot from Todo issues
+          await this.fillVacantSlots()
+        },
+        onHeartbeat: (_timestamp) => {
+          // Update last heartbeat for liveness tracking
+        },
       },
-      onHeartbeat: (timestamp) => {
-        // Update last heartbeat for liveness tracking
-      },
-    })
+    )
 
     logger.info("orchestrator", `Starting agent for ${issue.identifier}`, { issueId: issue.id })
   }
@@ -562,11 +561,10 @@ export class Orchestrator {
     // Fetch once to avoid N+1 API calls
     let issues: Issue[] = []
     try {
-      issues = await fetchIssuesByState(
-        this.config.linearApiKey,
-        this.config.linearTeamUuid,
-        [this.config.workflowStates.todo, this.config.workflowStates.inProgress],
-      )
+      issues = await fetchIssuesByState(this.config.linearApiKey, this.config.linearTeamUuid, [
+        this.config.workflowStates.todo,
+        this.config.workflowStates.inProgress,
+      ])
     } catch (err) {
       logger.warn("orchestrator", "Retry fetch failed, re-queuing entries", { error: String(err) })
       // Re-add entries to queue on fetch failure

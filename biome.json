@@ -14,7 +14,15 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true
+      "recommended": true,
+      "style": {
+        "noNonNullAssertion": "warn"
+      },
+      "suspicious": {
+        "noExplicitAny": "warn",
+        "noTemplateCurlyInString": "off",
+        "noShadowRestrictedNames": "warn"
+      }
     }
   },
   "javascript": {
@@ -24,6 +32,14 @@
     }
   },
   "files": {
-    "includes": ["**", "!**/node_modules", "!**/dist", "!**/bun.lock", "!**/dashboard"]
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/bun.lock",
+      "!**/dashboard",
+      "!.claude/skills",
+      "!.agents/skills"
+    ]
   }
 }

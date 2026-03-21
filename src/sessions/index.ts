@@ -10,15 +10,15 @@ export type {
 
 export type { BaseSession } from "./base-session"
 export { buildAgentEnv } from "./base-session"
-export { CodexSession } from "./codex-session"
 export { ClaudeSession } from "./claude-session"
+export { CodexSession } from "./codex-session"
 export { GeminiSession } from "./gemini-session"
 
 export {
-  SessionRegistry,
-  defaultRegistry,
   createSession,
-  registerSession,
+  defaultRegistry,
   listSessionTypes,
   registerBuiltinSessions,
+  registerSession,
+  SessionRegistry,
 } from "./session-factory"

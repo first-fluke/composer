@@ -1,9 +1,9 @@
 /**
  * HTTP Server integration tests — start a real server, exercise routes.
  */
-import { describe, test, expect, afterEach } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
+import type { StatusFn, WebhookHandlerFn } from "../server/http-server.ts"
 import { startHttpServer } from "../server/http-server.ts"
-import type { WebhookHandlerFn, StatusFn } from "../server/http-server.ts"
 
 // Use a high random port to avoid conflicts
 function randomPort(): number {
@@ -20,19 +20,20 @@ describe("HTTP Server", () => {
     }
   })
 
-  function startTestServer(overrides: {
-    onWebhook?: WebhookHandlerFn
-    getStatus?: StatusFn
-  } = {}) {
+  function startTestServer(overrides: { onWebhook?: WebhookHandlerFn; getStatus?: StatusFn } = {}) {
     const port = randomPort()
-    const onWebhook: WebhookHandlerFn = overrides.onWebhook ?? (async () => ({
-      status: 200,
-      body: JSON.stringify({ ok: true }),
-    }))
-    const getStatus: StatusFn = overrides.getStatus ?? (() => ({
-      running: true,
-      activeCount: 0,
-    }))
+    const onWebhook: WebhookHandlerFn =
+      overrides.onWebhook ??
+      (async () => ({
+        status: 200,
+        body: JSON.stringify({ ok: true }),
+      }))
+    const getStatus: StatusFn =
+      overrides.getStatus ??
+      (() => ({
+        running: true,
+        activeCount: 0,
+      }))
 
     const server = startHttpServer(port, { onWebhook, getStatus })
     stopServer = server.stop
@@ -109,7 +110,7 @@ describe("HTTP Server", () => {
     const { port } = startTestServer()
     // Bun's fetch overrides Content-Length to match actual body size,
     // so we must send a body that actually exceeds the 1MB limit.
-    const largeBody = "{" + '"x":"' + "a".repeat(1_100_000) + '"}'
+    const largeBody = `{"x":"${"a".repeat(1_100_000)}"}`
     const res = await fetch(`http://127.0.0.1:${port}/webhook`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

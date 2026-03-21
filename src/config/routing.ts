@@ -3,8 +3,8 @@
  * Determines which workspace root (git repo), agent type, and delivery mode to use per issue.
  */
 
-import type { Config, ScoreRoutingConfig } from "./env"
 import type { Issue } from "../domain/models"
+import type { Config, ScoreRoutingConfig } from "./env"
 
 export interface ResolvedRoute {
   workspaceRoot: string
@@ -65,10 +65,7 @@ export function resolveRouteWithScore(issue: Issue, config: Config): ResolvedRou
   }
 }
 
-function matchScoreTier(
-  score: number,
-  routing: ScoreRoutingConfig,
-): { agent: "claude" | "codex" | "gemini" } | null {
+function matchScoreTier(score: number, routing: ScoreRoutingConfig): { agent: "claude" | "codex" | "gemini" } | null {
   for (const tier of [routing.easy, routing.medium, routing.hard]) {
     if (score >= tier.min && score <= tier.max) {
       return { agent: tier.agent }

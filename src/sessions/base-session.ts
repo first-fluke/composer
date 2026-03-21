@@ -2,27 +2,38 @@
  * BaseSession — Shared event emitter and process management for all session implementations.
  */
 
+import type { ChildProcess } from "node:child_process"
 import type {
   AgentConfig,
+  AgentError,
   AgentEvent,
   AgentEventHandler,
   AgentEventType,
   AgentSession,
-  AgentError,
   RunResult,
 } from "./agent-session"
-import type { ChildProcess } from "node:child_process"
 
 /** Env vars safe to pass to agent subprocesses */
 const SAFE_ENV_KEYS = [
-  "PATH", "HOME", "USER", "SHELL", "LANG", "LC_ALL", "TERM", "TMPDIR",
-  "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL",
-  "NODE_ENV", "BUN_ENV",
+  "PATH",
+  "HOME",
+  "USER",
+  "SHELL",
+  "LANG",
+  "LC_ALL",
+  "TERM",
+  "TMPDIR",
+  "GIT_AUTHOR_NAME",
+  "GIT_AUTHOR_EMAIL",
+  "GIT_COMMITTER_NAME",
+  "GIT_COMMITTER_EMAIL",
+  "NODE_ENV",
+  "BUN_ENV",
 ]
 
 /** Per-agent env keys that must be forwarded for the agent CLI to authenticate */
 const AGENT_ENV_KEYS: Record<string, string[]> = {
-  codex:  ["OPENAI_API_KEY"],
+  codex: ["OPENAI_API_KEY"],
   claude: ["ANTHROPIC_API_KEY"],
   gemini: ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
 }
@@ -31,10 +42,7 @@ const AGENT_ENV_KEYS: Record<string, string[]> = {
  * Build a minimal env for the agent subprocess.
  * Only safe system vars + agent-specific auth keys + explicit config.env are included.
  */
-export function buildAgentEnv(
-  agentType: string,
-  extra: Record<string, string> = {},
-): Record<string, string> {
+export function buildAgentEnv(agentType: string, extra: Record<string, string> = {}): Record<string, string> {
   const env: Record<string, string> = {}
 
   for (const key of SAFE_ENV_KEYS) {
@@ -88,7 +96,7 @@ export abstract class BaseSession implements AgentSession {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set())
     }
-    this.listeners.get(event)!.add(handler)
+    this.listeners.get(event)?.add(handler)
   }
 
   off<T extends AgentEventType>(event: T, handler: AgentEventHandler<T>): void {
@@ -98,7 +106,9 @@ export abstract class BaseSession implements AgentSession {
   protected emit(event: AgentEvent): void {
     const handlers = this.listeners.get(event.type)
     if (handlers) {
-      Array.from(handlers).forEach(handler => handler(event))
+      for (const handler of handlers) {
+        handler(event)
+      }
     }
   }
 

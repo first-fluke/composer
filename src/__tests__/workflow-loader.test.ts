@@ -1,7 +1,7 @@
 /**
  * Workflow Loader tests — YAML parsing, prompt rendering, input sanitization.
  */
-import { describe, test, expect } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import { parseWorkflow, renderPrompt, sanitizeIssueBody } from "../config/workflow-loader.ts"
 import type { Issue, RunAttempt } from "../domain/models.ts"
 
@@ -43,15 +43,9 @@ describe("parseWorkflow", () => {
   })
 
   test("prompt template preserves content after second ---", () => {
-    const content = [
-      "---",
-      "agent:",
-      "  type: claude",
-      "---",
-      "Line 1",
-      "---",
-      "Line 3 after extra delimiter",
-    ].join("\n")
+    const content = ["---", "agent:", "  type: claude", "---", "Line 1", "---", "Line 3 after extra delimiter"].join(
+      "\n",
+    )
 
     const result = parseWorkflow(content)
     expect(result.promptTemplate).toContain("Line 1")
@@ -88,7 +82,8 @@ function makeAttempt(): RunAttempt {
 }
 
 describe("renderPrompt", () => {
-  const template = "Work on {{issue.identifier}}: {{issue.title}}\nDesc: {{issue.description}}\nPath: {{workspace_path}}\nAttempt: {{attempt.id}}\nRetry: {{retry_count}}"
+  const template =
+    "Work on {{issue.identifier}}: {{issue.title}}\nDesc: {{issue.description}}\nPath: {{workspace_path}}\nAttempt: {{attempt.id}}\nRetry: {{retry_count}}"
 
   test("all template variables are replaced", () => {
     const issue = makeIssue()

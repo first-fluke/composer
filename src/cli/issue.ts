@@ -120,7 +120,10 @@ async function expandWithClaude(rawInput: string): Promise<IssueInput> {
   return parseExpandedIssue(output)
 }
 
-export async function createIssue(input: string | undefined, options?: { yes?: boolean; raw?: boolean }): Promise<void> {
+export async function createIssue(
+  input: string | undefined,
+  options?: { yes?: boolean; raw?: boolean },
+): Promise<void> {
   const autoConfirm = options?.yes ?? false
   const noExpand = options?.raw ?? false
   const apiKey = process.env.LINEAR_API_KEY
@@ -181,10 +184,7 @@ export async function createIssue(input: string | undefined, options?: { yes?: b
 
   // Show preview and confirm
   const scoreDisplay = score !== null ? `\n${pc.cyan(`난이도: score:${score}`)}` : ""
-  p.note(
-    [`${pc.bold(title)}`, "", description || pc.dim("(설명 없음)"), scoreDisplay].join("\n"),
-    "이슈 미리보기",
-  )
+  p.note([`${pc.bold(title)}`, "", description || pc.dim("(설명 없음)"), scoreDisplay].join("\n"), "이슈 미리보기")
 
   if (!autoConfirm) {
     const confirmed = await p.confirm({ message: "이대로 생성할까요?" })

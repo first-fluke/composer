@@ -35,7 +35,9 @@ function log(level: LogLevel, component: string, message: string, fields?: LogFi
     console.log(JSON.stringify(entry))
   } else {
     const extra = fields
-      ? " " + Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(" ")
+      ? ` ${Object.entries(fields)
+          .map(([k, v]) => `${k}=${v}`)
+          .join(" ")}`
       : ""
     console.log(`${timestamp} [${level.toUpperCase()}] [${component}] ${message}${extra}`)
   }
