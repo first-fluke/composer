@@ -30,6 +30,7 @@ const configSchema = z.object({
   serverPort: z.number().min(1),
   logLevel: z.enum(["debug", "info", "warn", "error"]),
   logFormat: z.enum(["json", "text"]),
+  deliveryMode: z.enum(["merge", "pr"]),
 })
 
 export type Config = z.infer<typeof configSchema>
@@ -57,6 +58,7 @@ export function loadConfig(): Config {
     serverPort: Number(env.SERVER_PORT ?? "9741"),
     logLevel: (env.LOG_LEVEL ?? "info") as "debug" | "info" | "warn" | "error",
     logFormat: (env.LOG_FORMAT ?? "json") as "json" | "text",
+    deliveryMode: (env.DELIVERY_MODE ?? "merge") as "merge" | "pr",
   }
 
   const result = configSchema.safeParse(raw)

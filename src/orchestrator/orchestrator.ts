@@ -360,25 +360,28 @@ export class Orchestrator {
           })
         }
 
-        // Merge worktree branch into main and push
-        const mergeResult = await this.workspaceManager.mergeAndPush(workspace)
-        if (!mergeResult.ok) {
-          logger.error("orchestrator", `Merge failed for ${issue.identifier}`, { error: mergeResult.error })
-          try {
-            await addIssueComment(
-              this.config.linearApiKey,
+        // Deliver: merge directly or leave for PR review
+        if (this.config.deliveryMode === "merge") {
+          const mergeResult = await this.workspaceManager.mergeAndPush(workspace)
+          if (!mergeResult.ok) {
+            logger.error("orchestrator", `Merge failed for ${issue.identifier}`, { error: mergeResult.error })
+            try {
+              await addIssueComment(
+                this.config.linearApiKey,
               issue.id,
               `Symphony: Merge failed — manual resolution required\n\n${mergeResult.error}`,
             )
           } catch { /* best-effort */ }
-        }
+          }
 
-        // Cleanup worktree
-        try {
-          await this.workspaceManager.cleanup(workspace)
-        } catch (cleanupErr) {
-          logger.warn("orchestrator", "Worktree cleanup failed", { issueId: issue.id, error: String(cleanupErr) })
+          // Cleanup worktree after merge
+          try {
+            await this.workspaceManager.cleanup(workspace)
+          } catch (cleanupErr) {
+            logger.warn("orchestrator", "Worktree cleanup failed", { issueId: issue.id, error: String(cleanupErr) })
+          }
         }
+        // pr mode: agent already pushed branch + created PR, no merge/cleanup needed
 
         // Transition to Done
         try {

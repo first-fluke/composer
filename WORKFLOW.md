@@ -85,15 +85,12 @@ Follow the selected workflow. Key rules:
 ## Step 4: Deliver
 
 1. **Commit** all changes with conventional format: `type(scope): description`
-2. **Push** the branch to remote
-3. **Create a Pull Request** targeting `main`:
-   - Title: `type(scope): description` (same as commit)
-   - Body: issue summary, what was changed, test plan
-4. **Output a work summary** as the final message — this will be posted to the Linear issue:
+2. **Output a work summary** as the final message — this will be posted to the Linear issue:
    - What was done (brief bullet points)
    - Files changed
    - Key decisions made
-   - PR URL
+
+Note: The orchestrator handles merge and push automatically after agent completion. Do NOT push branches or create PRs — the orchestrator manages the full delivery lifecycle.
 
 ## Constraints
 - Work only within your workspace: {{workspace_path}}

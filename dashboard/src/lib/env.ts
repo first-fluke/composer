@@ -20,6 +20,7 @@ export const env = createEnv({
     SERVER_PORT: z.coerce.number().min(1).default(9741),
     LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
     LOG_FORMAT: z.enum(["json", "text"]).default("json"),
+    DELIVERY_MODE: z.enum(["merge", "pr"]).default("merge"),
   },
   runtimeEnv: {
     LINEAR_API_KEY: process.env.LINEAR_API_KEY,
@@ -39,6 +40,7 @@ export const env = createEnv({
     SERVER_PORT: process.env.SERVER_PORT,
     LOG_LEVEL: process.env.LOG_LEVEL,
     LOG_FORMAT: process.env.LOG_FORMAT,
+    DELIVERY_MODE: process.env.DELIVERY_MODE,
   },
 })
 
@@ -64,5 +66,6 @@ export function toOrchestratorConfig() {
     serverPort: env.SERVER_PORT,
     logLevel: env.LOG_LEVEL,
     logFormat: env.LOG_FORMAT,
+    deliveryMode: env.DELIVERY_MODE,
   }
 }
