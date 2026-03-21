@@ -33,6 +33,19 @@ logs/
 *.tmp
 .cache/
 
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!*.tfvars.example
+
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+
 # Planning (local only)
 PLAN.md
 docs/plans/

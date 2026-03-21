@@ -1,5 +1,10 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.0.6/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
   "organizeImports": {
     "enabled": true
   },
@@ -28,7 +33,8 @@
       "build",
       ".next",
       "bun.lock",
-      "*.gen.ts"
+      "*.gen.ts",
+      "*.tsbuildinfo"
     ]
   }
 }
