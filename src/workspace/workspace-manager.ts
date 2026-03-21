@@ -2,8 +2,35 @@
  * Workspace Manager — git worktree creation, cleanup, and lifecycle management.
  */
 
+import { spawn } from "node:child_process"
+import { readdir, mkdir, writeFile, rm, access } from "node:fs/promises"
 import type { Issue, Workspace, RunAttempt } from "../domain/models"
 import { logger } from "../observability/logger"
+
+/** Run a command and return its exit code + stderr text. */
+function runCommand(
+  cmd: string,
+  args: string[],
+  options: { cwd?: string; ignoreStdio?: boolean } = {},
+): Promise<{ exitCode: number; stderr: string }> {
+  return new Promise((resolve) => {
+    const proc = spawn(cmd, args, {
+      cwd: options.cwd ?? process.cwd(),
+      stdio: options.ignoreStdio ? "ignore" : ["ignore", "ignore", "pipe"],
+    })
+
+    let stderr = ""
+    if (!options.ignoreStdio && proc.stderr) {
+      proc.stderr.on("data", (chunk: Buffer) => {
+        stderr += chunk.toString()
+      })
+    }
+
+    proc.once("close", (code) => {
+      resolve({ exitCode: code ?? -1, stderr })
+    })
+  })
+}
 
 export class WorkspaceManager {
   constructor(
@@ -21,26 +48,24 @@ export class WorkspaceManager {
     const branch = `symphony/${key}`
 
     // Create git worktree first (it creates the directory)
-    const wt = Bun.spawn(["git", "worktree", "add", path, "-b", branch], {
-      cwd: process.cwd(),
-      stdout: "pipe",
-      stderr: "pipe",
-    })
-    await wt.exited
+    const { exitCode, stderr } = await runCommand(
+      "git",
+      ["worktree", "add", path, "-b", branch],
+      { cwd: process.cwd() },
+    )
 
-    if (wt.exitCode !== 0) {
+    if (exitCode !== 0) {
       // Worktree might already exist — try reusing
       const existing = await this.get(issue.id)
       if (existing) {
         logger.info("workspace-manager", "Reusing existing workspace", { issueId: issue.id, workspacePath: path })
         return existing
       }
-      const stderr = await new Response(wt.stderr).text()
       throw new Error(`git worktree add failed: ${stderr}\n  Fix: Ensure ${this.rootPath} is inside a git repository`)
     }
 
     // Create .symphony metadata directory after worktree
-    await Bun.spawn(["mkdir", "-p", `${path}/.symphony/attempts`]).exited
+    await mkdir(`${path}/.symphony/attempts`, { recursive: true })
 
     const workspace: Workspace = {
       issueId: issue.id,
@@ -56,10 +81,17 @@ export class WorkspaceManager {
 
   async get(issueId: string): Promise<Workspace | null> {
     // Scan existing workspaces
-    const entries = await Array.fromAsync(new Bun.Glob("*").scan({ cwd: this.rootPath, onlyFiles: false }))
+    let entries: string[]
+    try {
+      entries = await readdir(this.rootPath)
+    } catch {
+      return null
+    }
+
     for (const entry of entries) {
-      const metaPath = `${this.rootPath}/${entry}/.symphony/attempts`
-      if (await Bun.file(`${this.rootPath}/${entry}/.git`).exists()) {
+      const gitFile = `${this.rootPath}/${entry}/.git`
+      const exists = await access(gitFile).then(() => true).catch(() => false)
+      if (exists) {
         // Found a worktree — check if it matches the issueId
         // In practice, we store issueId in the workspace metadata
         // For now, return based on directory existence
@@ -77,19 +109,15 @@ export class WorkspaceManager {
 
   async saveAttempt(workspace: Workspace, attempt: RunAttempt): Promise<void> {
     const path = `${workspace.path}/.symphony/attempts/${attempt.id}.json`
-    await Bun.write(path, JSON.stringify(attempt, null, 2))
+    await writeFile(path, JSON.stringify(attempt, null, 2), "utf-8")
   }
 
   async cleanup(workspace: Workspace): Promise<void> {
     // Remove git worktree
-    const wt = Bun.spawn(["git", "worktree", "remove", workspace.path, "--force"], {
-      stdout: "pipe",
-      stderr: "pipe",
-    })
-    await wt.exited
+    await runCommand("git", ["worktree", "remove", workspace.path, "--force"])
 
     // Remove directory if it still exists
-    await Bun.spawn(["rm", "-rf", workspace.path]).exited
+    await rm(workspace.path, { recursive: true, force: true })
 
     logger.info("workspace-manager", "Workspace cleaned up", { issueId: workspace.issueId, workspacePath: workspace.path })
   }

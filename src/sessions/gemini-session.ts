@@ -7,7 +7,8 @@
  * In fallback mode, each execute() spawns a new gemini process (like ClaudeSession).
  */
 
-import { BaseSession, buildAgentEnv } from "./base-session"
+import { spawn } from "node:child_process"
+import { BaseSession, buildAgentEnv, waitForExit } from "./base-session"
 import type { AgentConfig } from "./agent-session"
 
 export class GeminiSession extends BaseSession {
@@ -27,12 +28,10 @@ export class GeminiSession extends BaseSession {
       this.startedAt = Date.now()
       const args = this.buildAcpArgs(config)
 
-      this.process = Bun.spawn(["gemini", ...args], {
+      this.process = spawn("gemini", args, {
         cwd: config.workspacePath,
-        env: buildAgentEnv("gemini", config.env),
-        stdin: "pipe",
-        stdout: "pipe",
-        stderr: "pipe",
+        env: buildAgentEnv("gemini", config.env) as NodeJS.ProcessEnv,
+        stdio: ["pipe", "pipe", "pipe"],
       })
     }
     // Fallback mode: process spawned per execute() call
@@ -50,9 +49,7 @@ export class GeminiSession extends BaseSession {
     if (this.useAcp) {
       if (!this.assertStarted()) return
       const message = JSON.stringify({ type: "prompt", content: prompt })
-      const sink = this.process!.stdin as import("bun").FileSink
-      sink.write(message + "\n")
-      sink.flush()
+      this.process!.stdin!.write(message + "\n")
     } else {
       await this.runOneShotWithPrompt(prompt)
     }
@@ -88,17 +85,14 @@ export class GeminiSession extends BaseSession {
     const args = this.buildFallbackArgs(config)
 
     // Pass prompt via stdin to avoid CLI arg injection and temp file issues
-    this.process = Bun.spawn(["gemini", ...args], {
+    this.process = spawn("gemini", args, {
       cwd: config.workspacePath,
-      env: buildAgentEnv("gemini", config.env),
-      stdin: "pipe",
-      stdout: "pipe",
-      stderr: "ignore",  // gemini outputs heavy MCP noise to stderr — ignore to prevent pipe blocking
+      env: buildAgentEnv("gemini", config.env) as NodeJS.ProcessEnv,
+      stdio: ["pipe", "pipe", "ignore"],  // gemini outputs heavy MCP noise to stderr — ignore to prevent pipe blocking
     })
 
-    const sink = this.process.stdin as import("bun").FileSink
-    sink.write(prompt)
-    sink.end()
+    this.process.stdin!.write(prompt, "utf-8")
+    this.process.stdin!.end()
 
     try {
       await this.readFallbackOutput()
@@ -107,81 +101,81 @@ export class GeminiSession extends BaseSession {
     }
   }
 
-  private async readFallbackOutput(): Promise<void> {
-    const proc = this.process
-    if (!proc?.stdout) {
-      this.emitError("CRASH", "gemini process has no stdout", false)
-      return
-    }
-
-    // Collect all stdout
-    const stdout = proc.stdout as ReadableStream<Uint8Array>
-    const reader = stdout.getReader()
-    const decoder = new TextDecoder()
-    let raw = ""
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        raw += decoder.decode(value, { stream: true })
-      }
-    } catch {
-      // Stream ended
-    }
-
-    await proc.exited
-    const exitCode = proc.exitCode ?? -1
-
-    // Parse the JSON response (gemini outputs a single JSON object)
-    if (exitCode === 0) {
-      try {
-        // Find the JSON object in the output (skip stderr-like noise that leaked to stdout)
-        const jsonStart = raw.indexOf("{")
-        if (jsonStart >= 0) {
-          const jsonStr = raw.slice(jsonStart)
-          const result = JSON.parse(jsonStr) as Record<string, unknown>
-          this.output = (result["response"] as string | undefined)
-            ?? (result["text"] as string | undefined)
-            ?? raw
-        } else {
-          this.output = raw
-        }
-      } catch {
-        this.output = raw
+  private readFallbackOutput(): Promise<void> {
+    return new Promise((resolve) => {
+      const proc = this.process
+      if (!proc?.stdout) {
+        this.emitError("CRASH", "gemini process has no stdout", false)
+        resolve()
+        return
       }
 
-      this.emit({ type: "output", chunk: this.output })
-      this.emit({
-        type: "complete",
-        result: this.buildRunResult(this.output, this.filesChanged),
+      // Collect all stdout
+      const decoder = new TextDecoder()
+      let raw = ""
+
+      proc.stdout.on("data", (chunk: Buffer) => {
+        raw += decoder.decode(chunk, { stream: true })
       })
-    } else {
-      this.emitError(
-        exitCode === -1 ? "TIMEOUT" : "CRASH",
-        `gemini exited with code ${exitCode}`,
-        true,
-      )
-    }
+
+      proc.stdout.on("error", () => {
+        // Stream error — proceed to close
+      })
+
+      proc.once("close", (code) => {
+        const exitCode = code ?? -1
+
+        // Parse the JSON response (gemini outputs a single JSON object)
+        if (exitCode === 0) {
+          try {
+            // Find the JSON object in the output (skip stderr-like noise that leaked to stdout)
+            const jsonStart = raw.indexOf("{")
+            if (jsonStart >= 0) {
+              const jsonStr = raw.slice(jsonStart)
+              const result = JSON.parse(jsonStr) as Record<string, unknown>
+              this.output = (result["response"] as string | undefined)
+                ?? (result["text"] as string | undefined)
+                ?? raw
+            } else {
+              this.output = raw
+            }
+          } catch {
+            this.output = raw
+          }
+
+          this.emit({ type: "output", chunk: this.output })
+          this.emit({
+            type: "complete",
+            result: this.buildRunResult(this.output, this.filesChanged),
+          })
+        } else {
+          this.emitError(
+            exitCode === -1 ? "TIMEOUT" : "CRASH",
+            `gemini exited with code ${exitCode}`,
+            true,
+          )
+        }
+
+        resolve()
+      })
+    })
   }
 
   // ── ACP stream parser (for future use) ──────────────────────────────────
 
-  private async readAcpStream(): Promise<void> {
-    const proc = this.process
-    if (!proc?.stdout) return
+  private readAcpStream(): Promise<void> {
+    return new Promise((resolve) => {
+      const proc = this.process
+      if (!proc?.stdout) {
+        resolve()
+        return
+      }
 
-    const stdout = proc.stdout as ReadableStream<Uint8Array>
-    const reader = stdout.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ""
+      const decoder = new TextDecoder()
+      let buffer = ""
 
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
+      proc.stdout.on("data", (chunk: Buffer) => {
+        buffer += decoder.decode(chunk, { stream: true })
         const lines = buffer.split("\n")
         buffer = lines.pop() ?? ""
 
@@ -195,10 +189,14 @@ export class GeminiSession extends BaseSession {
             this.emit({ type: "output", chunk: line })
           }
         }
-      }
-    } catch {
-      // Stream ended
-    }
+      })
+
+      proc.stdout.on("error", () => {
+        resolve()
+      })
+
+      proc.once("close", () => resolve())
+    })
   }
 
   private handleAcpEvent(event: unknown): void {

@@ -9,7 +9,8 @@
  * The "session" manages process lifecycle and event normalization.
  */
 
-import { BaseSession, buildAgentEnv } from "./base-session"
+import { spawn } from "node:child_process"
+import { BaseSession, buildAgentEnv, waitForExit } from "./base-session"
 import type { AgentConfig } from "./agent-session"
 
 export class ClaudeSession extends BaseSession {
@@ -50,17 +51,14 @@ export class ClaudeSession extends BaseSession {
     }
 
     // Pass prompt via stdin to avoid arg length/injection issues
-    this.process = Bun.spawn(["claude", ...args], {
+    this.process = spawn("claude", args, {
       cwd: this.config.workspacePath,
-      env: buildAgentEnv("claude", this.config.env),
-      stdin: "pipe",
-      stdout: "pipe",
-      stderr: "pipe",
+      env: buildAgentEnv("claude", this.config.env) as NodeJS.ProcessEnv,
+      stdio: ["pipe", "pipe", "pipe"],
     })
 
-    const sink = this.process.stdin as import("bun").FileSink
-    sink.write(prompt)
-    sink.end()
+    this.process.stdin!.write(prompt, "utf-8")
+    this.process.stdin!.end()
 
     await this.readStream()
   }
@@ -72,21 +70,19 @@ export class ClaudeSession extends BaseSession {
 
   // ── Stream parser ───────────────────────────────────────────────────────
 
-  private async readStream(): Promise<void> {
-    const proc = this.process
-    if (!proc?.stdout) return
+  private readStream(): Promise<void> {
+    return new Promise((resolve) => {
+      const proc = this.process
+      if (!proc?.stdout) {
+        resolve()
+        return
+      }
 
-    const stdout = proc.stdout as ReadableStream<Uint8Array>
-    const reader = stdout.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ""
+      const decoder = new TextDecoder()
+      let buffer = ""
 
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
+      proc.stdout.on("data", (chunk: Buffer) => {
+        buffer += decoder.decode(chunk, { stream: true })
         const lines = buffer.split("\n")
         buffer = lines.pop() ?? ""
 
@@ -99,22 +95,27 @@ export class ClaudeSession extends BaseSession {
             // Non-JSON stderr noise
           }
         }
-      }
-    } catch {
-      // Stream ended
-    }
+      })
 
-    await proc.exited
-    const exitCode = proc.exitCode ?? -1
+      proc.stdout.on("error", () => {
+        // Stream error — proceed to close
+      })
 
-    // If we haven't emitted a complete event from the "result" message, emit now
-    if (exitCode !== 0) {
-      this.emitError(
-        exitCode === -1 ? "TIMEOUT" : "CRASH",
-        `claude exited with code ${exitCode}`,
-        exitCode !== 1,
-      )
-    }
+      proc.once("close", (code) => {
+        const exitCode = code ?? -1
+
+        // If we haven't emitted a complete event from the "result" message, emit now
+        if (exitCode !== 0) {
+          this.emitError(
+            exitCode === -1 ? "TIMEOUT" : "CRASH",
+            `claude exited with code ${exitCode}`,
+            exitCode !== 1,
+          )
+        }
+
+        resolve()
+      })
+    })
   }
 
   private handleEvent(event: unknown): void {

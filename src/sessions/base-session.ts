@@ -11,7 +11,7 @@ import type {
   AgentError,
   RunResult,
 } from "./agent-session"
-import type { Subprocess, FileSink } from "bun"
+import type { ChildProcess } from "node:child_process"
 
 /** Env vars safe to pass to agent subprocesses */
 const SAFE_ENV_KEYS = [
@@ -49,9 +49,20 @@ export function buildAgentEnv(
   return { ...env, ...extra }
 }
 
+/** Returns a promise that resolves when the child process exits. */
+export function waitForExit(proc: ChildProcess): Promise<void> {
+  return new Promise((resolve) => {
+    if (proc.exitCode !== null) {
+      resolve()
+      return
+    }
+    proc.once("close", () => resolve())
+  })
+}
+
 export abstract class BaseSession implements AgentSession {
   protected config: AgentConfig | null = null
-  protected process: Subprocess | null = null
+  protected process: ChildProcess | null = null
   protected startedAt: number = 0
 
   private listeners = new Map<string, Set<AgentEventHandler<any>>>()
@@ -113,7 +124,7 @@ export abstract class BaseSession implements AgentSession {
   async dispose(): Promise<void> {
     if (this.process && this.isAlive()) {
       this.process.kill("SIGKILL")
-      await this.process.exited
+      await waitForExit(this.process)
     }
     this.listeners.clear()
     this.process = null

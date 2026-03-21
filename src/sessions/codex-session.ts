@@ -5,6 +5,7 @@
  * Lifecycle: initialize → thread/start → turn/start → events → turn/completed
  */
 
+import { spawn } from "node:child_process"
 import { BaseSession, buildAgentEnv } from "./base-session"
 import type { AgentConfig } from "./agent-session"
 
@@ -43,12 +44,10 @@ export class CodexSession extends BaseSession {
       args.push("-c", `model="${config.model}"`)
     }
 
-    this.process = Bun.spawn(["codex", ...args], {
+    this.process = spawn("codex", args, {
       cwd: config.workspacePath,
-      env: buildAgentEnv("codex", config.env),
-      stdin: "pipe",
-      stdout: "pipe",
-      stderr: "pipe",
+      env: buildAgentEnv("codex", config.env) as NodeJS.ProcessEnv,
+      stdio: ["pipe", "pipe", "pipe"],
     })
 
     this.readStream()
@@ -103,9 +102,8 @@ export class CodexSession extends BaseSession {
   private async rpc(method: string, params: Record<string, unknown>): Promise<unknown> {
     const id = ++this.rpcId
     const request: JsonRpcRequest = { jsonrpc: "2.0", id, method, params }
-    const sink = this.process!.stdin as import("bun").FileSink
-    sink.write(JSON.stringify(request) + "\n")
-    sink.flush()
+    const line = JSON.stringify(request) + "\n"
+    this.process!.stdin!.write(line)
 
     return new Promise((resolve, reject) => {
       this.pendingResolvers.set(id, { resolve, reject })
@@ -118,37 +116,32 @@ export class CodexSession extends BaseSession {
     })
   }
 
-  private async readStream(): Promise<void> {
+  private readStream(): void {
     if (!this.process?.stdout) return
 
-    const stdout = this.process.stdout as ReadableStream<Uint8Array>
-    const reader = stdout.getReader()
     const decoder = new TextDecoder()
     let buffer = ""
 
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+    this.process.stdout.on("data", (chunk: Buffer) => {
+      buffer += decoder.decode(chunk, { stream: true })
+      const lines = buffer.split("\n")
+      buffer = lines.pop() ?? ""
 
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split("\n")
-        buffer = lines.pop() ?? ""
-
-        for (const line of lines) {
-          if (!line.trim()) continue
-          try {
-            const msg: JsonRpcResponse = JSON.parse(line)
-            this.handleMessage(msg)
-          } catch {
-            this.output += line + "\n"
-            this.emit({ type: "output", chunk: line })
-          }
+      for (const line of lines) {
+        if (!line.trim()) continue
+        try {
+          const msg: JsonRpcResponse = JSON.parse(line)
+          this.handleMessage(msg)
+        } catch {
+          this.output += line + "\n"
+          this.emit({ type: "output", chunk: line })
         }
       }
-    } catch {
-      // Stream ended
-    }
+    })
+
+    this.process.stdout.on("error", () => {
+      // Stream error — ignore, process close will handle cleanup
+    })
   }
 
   private handleMessage(msg: JsonRpcResponse): void {
