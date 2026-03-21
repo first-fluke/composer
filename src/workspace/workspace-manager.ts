@@ -3,7 +3,7 @@
  */
 
 import { spawn } from "node:child_process"
-import { readdir, mkdir, writeFile, rm, access } from "node:fs/promises"
+import { readdir, readFile, mkdir, writeFile, rm, access } from "node:fs/promises"
 import type { Issue, Workspace, RunAttempt } from "../domain/models"
 import { logger } from "../observability/logger"
 
@@ -67,6 +67,9 @@ export class WorkspaceManager {
     // Create .symphony metadata directory after worktree
     await mkdir(`${path}/.symphony/attempts`, { recursive: true })
 
+    // Store issue metadata for workspace lookup
+    await writeFile(`${path}/.symphony/issue.json`, JSON.stringify({ issueId: issue.id, identifier: issue.identifier }))
+
     const workspace: Workspace = {
       issueId: issue.id,
       path,
@@ -80,7 +83,7 @@ export class WorkspaceManager {
   }
 
   async get(issueId: string): Promise<Workspace | null> {
-    // Scan existing workspaces
+    // Scan existing workspaces — match by issueId stored in metadata
     let entries: string[]
     try {
       entries = await readdir(this.rootPath)
@@ -89,19 +92,21 @@ export class WorkspaceManager {
     }
 
     for (const entry of entries) {
-      const gitFile = `${this.rootPath}/${entry}/.git`
-      const exists = await access(gitFile).then(() => true).catch(() => false)
-      if (exists) {
-        // Found a worktree — check if it matches the issueId
-        // In practice, we store issueId in the workspace metadata
-        // For now, return based on directory existence
-        return {
-          issueId,
-          path: `${this.rootPath}/${entry}`,
-          key: entry,
-          status: "idle",
-          createdAt: new Date().toISOString(),
+      const metaFile = `${this.rootPath}/${entry}/.symphony/issue.json`
+      try {
+        const raw = await readFile(metaFile, "utf-8")
+        const meta = JSON.parse(raw) as { issueId: string }
+        if (meta.issueId === issueId) {
+          return {
+            issueId,
+            path: `${this.rootPath}/${entry}`,
+            key: entry,
+            status: "idle",
+            createdAt: new Date().toISOString(),
+          }
         }
+      } catch {
+        // No metadata — skip
       }
     }
     return null

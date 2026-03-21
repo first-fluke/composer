@@ -57,8 +57,25 @@ export class Orchestrator {
     const { promptTemplate } = parseWorkflow(workflowContent)
     this.promptTemplate = promptTemplate
 
-    // Startup sync — one-time Linear API call
-    await this.startupSync()
+    // Startup sync — run in background so server starts immediately
+    const runStartupSync = async () => {
+      // Small delay to let the server bind first
+      await new Promise((r) => setTimeout(r, 2_000))
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await this.startupSync()
+          return
+        } catch (err) {
+          if (attempt < 3) {
+            logger.warn("orchestrator", `Startup sync attempt ${attempt} failed, retrying in 3s...`)
+            await new Promise((r) => setTimeout(r, 3_000))
+          } else {
+            logger.error("orchestrator", "Startup sync failed after 3 attempts", { error: String(err) })
+          }
+        }
+      }
+    }
+    runStartupSync()
 
     // Periodic retry queue processing
     this.retryTimer = setInterval(() => this.processRetryQueue(), 30_000)
@@ -98,25 +115,27 @@ export class Orchestrator {
   // ── Startup Sync ──────────────────────────────────────────────────────
 
   private async startupSync(): Promise<void> {
-    try {
-      const issues = await fetchIssuesByState(
-        this.config.linearApiKey,
-        this.config.linearTeamUuid,
-        [this.config.workflowStates.todo, this.config.workflowStates.inProgress],
-      )
+    const issues = await fetchIssuesByState(
+      this.config.linearApiKey,
+      this.config.linearTeamUuid,
+      [this.config.workflowStates.todo, this.config.workflowStates.inProgress],
+    )
 
-      logger.info("orchestrator", `Startup sync completed, found ${issues.length} issues`)
+    // Sort by issue number ascending (e.g. FIR-5 before FIR-48)
+    issues.sort((a, b) => {
+      const numA = Number.parseInt(a.identifier.split("-")[1] ?? "0", 10)
+      const numB = Number.parseInt(b.identifier.split("-")[1] ?? "0", 10)
+      return numA - numB
+    })
 
-      for (const issue of issues) {
-        if (issue.status.id === this.config.workflowStates.todo) {
-          await this.handleIssueTodo(issue)
-        } else {
-          await this.handleIssueInProgress(issue)
-        }
+    logger.info("orchestrator", `Startup sync completed, found ${issues.length} issues`)
+
+    for (const issue of issues) {
+      if (issue.status.id === this.config.workflowStates.todo) {
+        await this.handleIssueTodo(issue)
+      } else {
+        await this.handleIssueInProgress(issue)
       }
-    } catch (err) {
-      logger.error("orchestrator", "Startup sync failed", { error: String(err) })
-      // Continue running — webhooks will still work
     }
   }
 

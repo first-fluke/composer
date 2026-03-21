@@ -86,9 +86,11 @@ program
 program
   .command("issue [description]")
   .description("Create a Linear issue (triggers agent automatically)")
-  .action(async (description?: string) => {
+  .option("-y, --yes", "Skip confirmation prompt")
+  .option("--raw", "Skip Claude CLI expansion, use input as-is")
+  .action(async (description: string | undefined, opts: { yes?: boolean; raw?: boolean }) => {
     const { createIssue } = await import("./issue")
-    await createIssue(description)
+    await createIssue(description, { yes: opts.yes, raw: opts.raw })
   })
 
 // ── status ───────────────────────────────────────────────────────────────────

@@ -85,7 +85,9 @@ async function expandWithClaude(rawInput: string): Promise<IssueInput> {
   return parseExpandedIssue(output)
 }
 
-export async function createIssue(input: string | undefined): Promise<void> {
+export async function createIssue(input: string | undefined, options?: { yes?: boolean; raw?: boolean }): Promise<void> {
+  const autoConfirm = options?.yes ?? false
+  const noExpand = options?.raw ?? false
   const apiKey = process.env.LINEAR_API_KEY
   const teamUuid = process.env.LINEAR_TEAM_UUID
   const todoStateId = process.env.LINEAR_WORKFLOW_STATE_TODO
@@ -116,21 +118,28 @@ export async function createIssue(input: string | undefined): Promise<void> {
     input = t
   }
 
-  // Expand with Claude
   const s = p.spinner()
-  s.start("이슈 확장 중...")
 
-  try {
-    const expanded = await expandWithClaude(input)
-    title = expanded.title
-    description = expanded.description
-    s.stop("이슈 확장 완료")
-  } catch {
-    // Fallback: use raw input as-is
-    s.stop(pc.yellow("Claude CLI 사용 불가 — 원본 입력 사용"))
+  if (noExpand) {
     const parsed = parseIssueInput(input)
     title = parsed.title || input
     description = parsed.description
+  } else {
+    // Expand with Claude
+    s.start("이슈 확장 중...")
+
+    try {
+      const expanded = await expandWithClaude(input)
+      title = expanded.title
+      description = expanded.description
+      s.stop("이슈 확장 완료")
+    } catch {
+      // Fallback: use raw input as-is
+      s.stop(pc.yellow("Claude CLI 사용 불가 — 원본 입력 사용"))
+      const parsed = parseIssueInput(input)
+      title = parsed.title || input
+      description = parsed.description
+    }
   }
 
   // Show preview and confirm
@@ -139,10 +148,12 @@ export async function createIssue(input: string | undefined): Promise<void> {
     "이슈 미리보기",
   )
 
-  const confirmed = await p.confirm({ message: "이대로 생성할까요?" })
-  if (p.isCancel(confirmed) || !confirmed) {
-    p.cancel("취소되었습니다")
-    process.exit(0)
+  if (!autoConfirm) {
+    const confirmed = await p.confirm({ message: "이대로 생성할까요?" })
+    if (p.isCancel(confirmed) || !confirmed) {
+      p.cancel("취소되었습니다")
+      process.exit(0)
+    }
   }
 
   // Create in Linear
