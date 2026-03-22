@@ -3,6 +3,12 @@
  * No external dependencies. No business logic.
  */
 
+export interface IssueRelation {
+  type: "blocks" | "blocked_by" | "related" | "duplicate"
+  relatedIssueId: string
+  relatedIdentifier: string
+}
+
 export interface Issue {
   id: string
   identifier: string
@@ -14,6 +20,9 @@ export interface Issue {
   url: string
   /** ISO/IEC 14143 function point score (1–10), null = not yet analyzed */
   score: number | null
+  parentId: string | null
+  children: string[]
+  relations: IssueRelation[]
 }
 
 /**
@@ -81,8 +90,36 @@ export interface RetryEntry {
   lastError: string
 }
 
+export interface WaitingEntry {
+  issueId: string
+  identifier: string
+  blockedBy: string[]
+  enqueuedAt: string
+}
+
 export interface OrchestratorRuntimeState {
   isRunning: boolean
   activeWorkspaces: Map<string, Workspace>
+  waitingIssues: Map<string, WaitingEntry>
   lastEventAt: string | null
+}
+
+// ── DAG Types ─────────────────────────────────────────────────────────
+
+export type DagNodeStatus = "waiting" | "ready" | "running" | "done" | "cancelled"
+
+export interface DagNode {
+  issueId: string
+  identifier: string
+  status: DagNodeStatus
+  parentId: string | null
+  children: string[]
+  blockedBy: string[]
+  blocks: string[]
+}
+
+export interface DagCache {
+  version: number
+  updatedAt: string
+  nodes: Record<string, DagNode>
 }

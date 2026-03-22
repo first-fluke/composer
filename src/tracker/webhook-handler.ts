@@ -6,7 +6,7 @@ import { z } from "zod/v4"
 import type { Issue } from "../domain/models"
 import { parseScoreFromLabels } from "../domain/models"
 import { logger } from "../observability/logger"
-import type { WebhookEvent } from "./types"
+import type { ParsedWebhookEvent, RelationWebhookEvent, WebhookEvent } from "./types"
 
 /**
  * Verify HMAC-SHA256 webhook signature.
@@ -28,7 +28,7 @@ export async function verifyWebhookSignature(payload: string, signature: string,
   return diff === 0
 }
 
-// ── Webhook Payload Schema ──────────────────────────────────────────
+// ── Webhook Payload Schemas ─────────────────────────────────────────
 
 const webhookPayloadSchema = z.object({
   action: z.enum(["create", "update", "remove"]),
@@ -69,12 +69,42 @@ const webhookPayloadSchema = z.object({
     .optional(),
 })
 
+const relationPayloadSchema = z.object({
+  action: z.enum(["create", "remove"]),
+  type: z.literal("IssueRelation"),
+  data: z.object({
+    id: z.string(),
+    type: z.string(),
+    issueId: z.string(),
+    relatedIssueId: z.string(),
+  }),
+})
+
 /**
- * Parse Linear webhook payload into a WebhookEvent.
+ * Parse Linear webhook payload into a WebhookEvent or RelationWebhookEvent.
  */
-export function parseWebhookEvent(payload: string): WebhookEvent | null {
+export function parseWebhookEvent(payload: string): ParsedWebhookEvent | null {
   try {
     const raw = JSON.parse(payload)
+
+    // Try IssueRelation first (more specific type check)
+    if (raw?.type === "IssueRelation") {
+      const result = relationPayloadSchema.safeParse(raw)
+      if (!result.success) {
+        logger.warn("tracker-client", "IssueRelation webhook validation failed", { error: result.error.message })
+        return null
+      }
+      const data = result.data
+      return {
+        kind: "relation",
+        action: data.action,
+        issueId: data.data.issueId,
+        relatedIssueId: data.data.relatedIssueId,
+        relationType: data.data.type,
+      } satisfies RelationWebhookEvent
+    }
+
+    // Issue events
     const result = webhookPayloadSchema.safeParse(raw)
 
     if (!result.success) {
@@ -105,6 +135,9 @@ export function parseWebhookEvent(payload: string): WebhookEvent | null {
       },
       labels: data.data.labels.map((l) => l.name),
       score: parseScoreFromLabels(data.data.labels.map((l) => l.name)),
+      parentId: null,
+      children: [],
+      relations: [],
     }
 
     const stateId = data.data.state?.id ?? ""
@@ -116,7 +149,7 @@ export function parseWebhookEvent(payload: string): WebhookEvent | null {
       issue,
       stateId,
       prevStateId,
-    }
+    } satisfies WebhookEvent
   } catch (err) {
     logger.error("tracker-client", "Failed to parse webhook payload", { error: String(err) })
     return null

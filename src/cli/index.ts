@@ -85,10 +85,24 @@ program
   .description("Create a Linear issue (triggers agent automatically)")
   .option("-y, --yes", "Skip confirmation prompt")
   .option("--raw", "Skip Claude CLI expansion, use input as-is")
-  .action(async (description: string | undefined, opts: { yes?: boolean; raw?: boolean }) => {
-    const { createIssue } = await import("./issue")
-    await createIssue(description, { yes: opts.yes, raw: opts.raw })
-  })
+  .option("--parent <identifier>", "Create as sub-issue of the given parent (e.g. ACR-10)")
+  .option("--blocked-by <identifier>", "Mark as blocked by the given issue (e.g. ACR-12)")
+  .option("--breakdown", "Auto-decompose into sub-issues with dependency DAG")
+  .action(
+    async (
+      description: string | undefined,
+      opts: { yes?: boolean; raw?: boolean; parent?: string; blockedBy?: string; breakdown?: boolean },
+    ) => {
+      const { createIssue } = await import("./issue")
+      await createIssue(description, {
+        yes: opts.yes,
+        raw: opts.raw,
+        parent: opts.parent,
+        blockedBy: opts.blockedBy,
+        breakdown: opts.breakdown,
+      })
+    },
+  )
 
 // ── status ───────────────────────────────────────────────────────────────────
 program

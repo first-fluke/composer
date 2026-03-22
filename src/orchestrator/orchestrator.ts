@@ -21,22 +21,24 @@ import { parseWebhookEvent, verifyWebhookSignature } from "../tracker/webhook-ha
 import { WorkspaceManager } from "../workspace/workspace-manager"
 import { AgentRunnerService } from "./agent-runner"
 import { type CompletionDeps, createCompletionCallbacks } from "./completion-handler"
-import { sortByIssueNumber } from "./helpers"
+import { DagScheduler } from "./dag-scheduler"
+import { OrchestratorEventEmitter } from "./event-emitter"
+import { buildOrchestratorStatus, sortByIssueNumber } from "./helpers"
 import { RetryQueue } from "./retry-queue"
 import { analyzeScoreInBackground } from "./scoring-service"
 
-type OrchestratorEventHandler = (...args: any[]) => void
-
-export class Orchestrator {
+export class Orchestrator extends OrchestratorEventEmitter {
   private state: OrchestratorRuntimeState = {
     isRunning: false,
     activeWorkspaces: new Map(),
+    waitingIssues: new Map(),
     lastEventAt: null,
   }
 
   private workspaceManager: WorkspaceManager
   private agentRunner: AgentRunnerService
   private retryQueue: RetryQueue
+  private dagScheduler: DagScheduler
   private completionDeps: CompletionDeps
   private retryTimer: ReturnType<typeof setInterval> | null = null
   private promptTemplate: string = ""
@@ -47,38 +49,16 @@ export class Orchestrator {
   /** Maps issueId -> attemptId for active agent sessions, enabling kill on left-in-progress. */
   private activeAttempts = new Map<string, string>()
 
-  /** EventEmitter for team dashboard broadcasting */
-  private eventListeners = new Map<string, Set<OrchestratorEventHandler>>()
-
-  on(event: string, handler: OrchestratorEventHandler): void {
-    const handlers = this.eventListeners.get(event) ?? new Set()
-    handlers.add(handler)
-    this.eventListeners.set(event, handlers)
-  }
-
-  off(event: string, handler: OrchestratorEventHandler): void {
-    this.eventListeners.get(event)?.delete(handler)
-  }
-
-  private emitEvent(event: string, payload: Record<string, unknown>): void {
-    const handlers = this.eventListeners.get(event)
-    if (!handlers) return
-    for (const handler of handlers) {
-      try {
-        handler(payload)
-      } catch (err) {
-        logger.warn("orchestrator", `Event handler error for ${event}`, { error: String(err) })
-      }
-    }
-  }
-
   constructor(private config: Config) {
+    super()
     this.workspaceManager = new WorkspaceManager(config.workspaceRoot)
     this.agentRunner = new AgentRunnerService()
     this.retryQueue = new RetryQueue(config.agentMaxRetries, config.agentRetryDelay)
+    this.dagScheduler = new DagScheduler(`${config.workspaceRoot}/.symphony/dag-cache.json`)
     this.completionDeps = {
       config,
       workspaceManager: this.workspaceManager,
+      dagScheduler: this.dagScheduler,
       cleanupState: (issueId, status) => {
         const ws = this.state.activeWorkspaces.get(issueId)
         if (ws) ws.status = status
@@ -89,6 +69,12 @@ export class Orchestrator {
       addRetry: (issueId, count, error) => this.retryQueue.add(issueId, count, error),
       emitEvent: (event, payload) => this.emitEvent(event, payload),
       fillVacantSlots: () => this.fillVacantSlots(),
+      triggerUnblocked: async (issueIds) => {
+        for (const id of issueIds) {
+          this.state.waitingIssues.delete(id)
+        }
+        await this.reevaluateWaitingIssues()
+      },
     }
   }
 
@@ -180,16 +166,12 @@ export class Orchestrator {
       this.config.workflowStates.todo,
       this.config.workflowStates.inProgress,
     ])
-
+    await this.dagScheduler.reconcileWithLinear(issues)
     sortByIssueNumber(issues)
     logger.info("orchestrator", `Startup sync completed, found ${issues.length} issues`)
-
     for (const issue of issues) {
-      if (issue.status.id === this.config.workflowStates.todo) {
-        await this.handleIssueTodo(issue)
-      } else {
-        await this.handleIssueInProgress(issue)
-      }
+      if (issue.status.id === this.config.workflowStates.todo) await this.handleIssueTodo(issue)
+      else await this.handleIssueInProgress(issue)
     }
   }
 
@@ -240,11 +222,26 @@ export class Orchestrator {
 
     this.state.lastEventAt = new Date().toISOString()
 
+    // Route relation events (DAG updates)
+    if ("kind" in event && event.kind === "relation") {
+      logger.debug("orchestrator", `Relation webhook: ${event.action} ${event.relationType}`, {
+        issueId: event.issueId,
+        relatedIssueId: event.relatedIssueId,
+      })
+      if (event.action === "create") {
+        this.dagScheduler.addRelation(event.issueId, event.relatedIssueId, event.relationType)
+      } else if (event.action === "remove") {
+        this.dagScheduler.removeRelation(event.issueId, event.relatedIssueId)
+        await this.reevaluateWaitingIssues()
+      }
+      return { status: 200, body: '{"ok":true}' }
+    }
+
     logger.debug("orchestrator", `Webhook received: ${event.action} for ${event.issue.identifier}`, {
       issueId: event.issueId,
     })
 
-    // Route event
+    // Route issue events
     if (event.stateId === this.config.workflowStates.todo) {
       // Instant acknowledgment — webhook-triggered only (not startup sync or retry)
       if (!this.processingIssues.has(event.issueId) && !this.state.activeWorkspaces.has(event.issueId)) {
@@ -290,6 +287,25 @@ export class Orchestrator {
   }
 
   private async handleIssueTodo(issue: Issue): Promise<void> {
+    // DAG: check if issue has unresolved blockers
+    const blockers = this.dagScheduler.getUnresolvedBlockers(issue.id)
+    if (blockers.length > 0 && !this.state.waitingIssues.has(issue.id)) {
+      this.state.waitingIssues.set(issue.id, {
+        issueId: issue.id,
+        identifier: issue.identifier,
+        blockedBy: blockers,
+        enqueuedAt: new Date().toISOString(),
+      })
+      addIssueComment(
+        this.config.linearApiKey,
+        issue.id,
+        `Symphony: Waiting — blocked by ${blockers.length} issue(s). Will auto-start when dependencies complete.`,
+      ).catch(() => {})
+      logger.info("orchestrator", `${issue.identifier} blocked by ${blockers.length} issue(s), waiting`)
+      return
+    }
+    if (blockers.length > 0) return
+
     if (!this.tryAcceptOrQueue(issue.id)) return
 
     // Lock: mark as processing to prevent TOCTOU races
@@ -432,13 +448,43 @@ export class Orchestrator {
 
     this.state.activeWorkspaces.delete(issueId)
     this.retryQueue.remove(issueId)
+
+    // DAG: mark as cancelled and notify blocked issues
+    this.dagScheduler.updateNodeStatus(issueId, "cancelled")
+    for (const b of this.dagScheduler.getBlockedIssues(issueId)) {
+      addIssueComment(
+        this.config.linearApiKey,
+        b.issueId,
+        `Symphony: Blocker ${b.identifier} was cancelled. Manual review needed.`,
+      ).catch(() => {})
+    }
+  }
+
+  /** Re-evaluate waiting issues after a relation removal or blocker completion. */
+  private async reevaluateWaitingIssues(): Promise<void> {
+    const unblockedIds = [...this.state.waitingIssues.keys()].filter(
+      (id) => this.dagScheduler.getUnresolvedBlockers(id).length === 0,
+    )
+    if (unblockedIds.length === 0) return
+
+    const issues = await fetchIssuesByState(this.config.linearApiKey, this.config.linearTeamUuid, [
+      this.config.workflowStates.todo,
+    ]).catch(() => [] as Issue[])
+
+    for (const id of unblockedIds) {
+      const entry = this.state.waitingIssues.get(id)
+      this.state.waitingIssues.delete(id)
+      const issue = issues.find((i) => i.id === id)
+      if (issue) {
+        logger.info("orchestrator", `${entry?.identifier ?? id} unblocked, dispatching`)
+        await this.handleIssueTodo(issue)
+      }
+    }
   }
 
   private async processRetryQueue(): Promise<void> {
     const ready = this.retryQueue.drain()
     if (ready.length === 0) return
-
-    // Fetch once to avoid N+1 API calls
     let issues: Issue[] = []
     try {
       issues = await fetchIssuesByState(this.config.linearApiKey, this.config.linearTeamUuid, [
@@ -447,52 +493,21 @@ export class Orchestrator {
       ])
     } catch (err) {
       logger.warn("orchestrator", "Retry fetch failed, re-queuing entries", { error: String(err) })
-      // Re-add entries to queue on fetch failure
-      for (const entry of ready) {
-        this.retryQueue.add(entry.issueId, entry.attemptCount, entry.lastError)
-      }
+      for (const entry of ready) this.retryQueue.add(entry.issueId, entry.attemptCount, entry.lastError)
       return
     }
-
     for (const entry of ready) {
       const issue = issues.find((i) => i.id === entry.issueId)
       if (issue) {
-        if (issue.status.id === this.config.workflowStates.todo) {
-          await this.handleIssueTodo(issue)
-        } else {
-          await this.handleIssueInProgress(issue)
-        }
+        if (issue.status.id === this.config.workflowStates.todo) await this.handleIssueTodo(issue)
+        else await this.handleIssueInProgress(issue)
       } else {
-        logger.info("orchestrator", "Retry issue no longer in Todo/InProgress, dropping", {
-          issueId: entry.issueId,
-        })
+        logger.info("orchestrator", "Retry issue no longer in Todo/InProgress, dropping", { issueId: entry.issueId })
       }
     }
   }
 
   private getStatus(): Record<string, unknown> {
-    const workspaces = Array.from(this.state.activeWorkspaces.entries()).map(([id, ws]) => {
-      const attemptId = this.activeAttempts.get(id)
-      return {
-        issueId: id,
-        key: ws.key,
-        status: ws.status,
-        startedAt: ws.createdAt,
-        lastOutput: attemptId ? this.agentRunner.getLastOutput(attemptId) : undefined,
-      }
-    })
-
-    return {
-      isRunning: this.state.isRunning,
-      lastEventAt: this.state.lastEventAt,
-      activeWorkspaces: workspaces,
-      activeAgents: this.agentRunner.activeCount,
-      retryQueueSize: this.retryQueue.size,
-      config: {
-        agentType: this.config.agentType,
-        maxParallel: this.config.maxParallel,
-        serverPort: this.config.serverPort,
-      },
-    }
+    return buildOrchestratorStatus(this.state, this.activeAttempts, this.agentRunner, this.retryQueue, this.config)
   }
 }

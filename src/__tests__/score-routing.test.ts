@@ -56,6 +56,9 @@ function makeIssue(overrides: Partial<Issue> = {}): Issue {
     labels: [],
     url: "https://linear.app/test/1",
     score: null,
+    parentId: null,
+    children: [],
+    relations: [],
     ...overrides,
   }
 }

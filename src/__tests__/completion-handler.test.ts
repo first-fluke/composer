@@ -20,6 +20,9 @@ function makeIssue(overrides: Partial<Issue> = {}): Issue {
     labels: [],
     url: "https://linear.app/proj/issue/PROJ-1",
     score: null,
+    parentId: null,
+    children: [],
+    relations: [],
     ...overrides,
   }
 }
@@ -122,10 +125,17 @@ describe("createCompletionCallbacks", () => {
   function makeDeps(
     mockWm: ReturnType<typeof makeMockWorkspaceManager>,
     configOverrides: Partial<Config> = {},
+    depsOverrides: Partial<CompletionDeps> = {},
   ): CompletionDeps {
     return {
       config: makeConfig(configOverrides),
       workspaceManager: mockWm as unknown as CompletionDeps["workspaceManager"],
+      dagScheduler: {
+        updateNodeStatus: () => {},
+        getUnblockedByCompletion: () => [],
+        allChildrenDone: () => false,
+        getChildrenSummaries: () => [],
+      } as unknown as CompletionDeps["dagScheduler"],
       cleanupState: (issueId, status) => stateCleanups.push({ issueId, status }),
       saveAttempt: () => {},
       addRetry: (issueId, count, error) => {
@@ -136,6 +146,8 @@ describe("createCompletionCallbacks", () => {
       fillVacantSlots: async () => {
         filledSlots++
       },
+      triggerUnblocked: async () => {},
+      ...depsOverrides,
     }
   }
 
@@ -336,6 +348,149 @@ describe("createCompletionCallbacks", () => {
       })
 
       expect(pushed).toBe(false)
+    })
+  })
+
+  describe("onComplete — DAG cascade", () => {
+    function makeCompletedAttempt() {
+      return {
+        ...makeAttempt(),
+        finishedAt: new Date().toISOString(),
+        exitCode: 0,
+        agentOutput: "Done",
+      }
+    }
+
+    test("calls dagScheduler.updateNodeStatus with done", async () => {
+      const dagCalls: string[] = []
+      const mockWm = makeMockWorkspaceManager({ hasCodeChanges: true, diffStat: "1 file changed" })
+      const deps = makeDeps(
+        mockWm,
+        {},
+        {
+          dagScheduler: {
+            updateNodeStatus: (id: string, status: string) => dagCalls.push(`${id}:${status}`),
+            getUnblockedByCompletion: () => [],
+            allChildrenDone: () => false,
+            getChildrenSummaries: () => [],
+          } as unknown as CompletionDeps["dagScheduler"],
+        },
+      )
+      const callbacks = createCompletionCallbacks(deps, makeIssue(), makeWorkspace(), makeAttempt(), makeRoute())
+
+      await callbacks.onComplete(makeCompletedAttempt())
+
+      expect(dagCalls).toContain("issue-1:done")
+    })
+
+    test("triggers unblocked issues when getUnblockedByCompletion returns IDs", async () => {
+      const triggeredIds: string[][] = []
+      const mockWm = makeMockWorkspaceManager({ hasCodeChanges: true, diffStat: "1 file changed" })
+      const deps = makeDeps(
+        mockWm,
+        {},
+        {
+          dagScheduler: {
+            updateNodeStatus: () => {},
+            getUnblockedByCompletion: () => ["issue-2", "issue-3"],
+            allChildrenDone: () => false,
+            getChildrenSummaries: () => [],
+          } as unknown as CompletionDeps["dagScheduler"],
+          triggerUnblocked: async (ids: string[]) => {
+            triggeredIds.push(ids)
+          },
+        },
+      )
+      const callbacks = createCompletionCallbacks(deps, makeIssue(), makeWorkspace(), makeAttempt(), makeRoute())
+
+      await callbacks.onComplete(makeCompletedAttempt())
+
+      expect(triggeredIds.length).toBe(1)
+      expect(triggeredIds[0]).toEqual(["issue-2", "issue-3"])
+    })
+
+    test("does not trigger when no issues unblocked", async () => {
+      const triggeredIds: string[][] = []
+      const mockWm = makeMockWorkspaceManager({ hasCodeChanges: true, diffStat: "1 file changed" })
+      const deps = makeDeps(
+        mockWm,
+        {},
+        {
+          dagScheduler: {
+            updateNodeStatus: () => {},
+            getUnblockedByCompletion: () => [],
+            allChildrenDone: () => false,
+            getChildrenSummaries: () => [],
+          } as unknown as CompletionDeps["dagScheduler"],
+          triggerUnblocked: async (ids: string[]) => {
+            triggeredIds.push(ids)
+          },
+        },
+      )
+      const callbacks = createCompletionCallbacks(deps, makeIssue(), makeWorkspace(), makeAttempt(), makeRoute())
+
+      await callbacks.onComplete(makeCompletedAttempt())
+
+      expect(triggeredIds.length).toBe(0)
+    })
+
+    test("auto-completes parent when allChildrenDone returns true", async () => {
+      const mockWm = makeMockWorkspaceManager({ hasCodeChanges: true, diffStat: "1 file changed" })
+      const issue = makeIssue({ parentId: "parent-1" })
+      let allChildrenDoneCalled = false
+      let getChildrenSummariesCalled = false
+      const deps = makeDeps(
+        mockWm,
+        {},
+        {
+          dagScheduler: {
+            updateNodeStatus: () => {},
+            getUnblockedByCompletion: () => [],
+            allChildrenDone: (parentId: string) => {
+              allChildrenDoneCalled = parentId === "parent-1"
+              return true
+            },
+            getChildrenSummaries: (parentId: string) => {
+              getChildrenSummariesCalled = parentId === "parent-1"
+              return []
+            },
+          } as unknown as CompletionDeps["dagScheduler"],
+        },
+      )
+      const callbacks = createCompletionCallbacks(deps, issue, makeWorkspace(), makeAttempt(), makeRoute())
+
+      // The Linear API calls inside the auto-complete block will fail (no real API),
+      // but errors are caught and logged — the flow must complete without throwing.
+      await expect(callbacks.onComplete(makeCompletedAttempt())).resolves.toBeUndefined()
+
+      expect(allChildrenDoneCalled).toBe(true)
+      expect(getChildrenSummariesCalled).toBe(true)
+    })
+
+    test("does not auto-complete parent when allChildrenDone returns false", async () => {
+      const mockWm = makeMockWorkspaceManager({ hasCodeChanges: true, diffStat: "1 file changed" })
+      const issue = makeIssue({ parentId: "parent-1" })
+      let getChildrenSummariesCalled = false
+      const deps = makeDeps(
+        mockWm,
+        {},
+        {
+          dagScheduler: {
+            updateNodeStatus: () => {},
+            getUnblockedByCompletion: () => [],
+            allChildrenDone: () => false,
+            getChildrenSummaries: () => {
+              getChildrenSummariesCalled = true
+              return []
+            },
+          } as unknown as CompletionDeps["dagScheduler"],
+        },
+      )
+      const callbacks = createCompletionCallbacks(deps, issue, makeWorkspace(), makeAttempt(), makeRoute())
+
+      await callbacks.onComplete(makeCompletedAttempt())
+
+      expect(getChildrenSummariesCalled).toBe(false)
     })
   })
 

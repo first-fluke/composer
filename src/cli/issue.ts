@@ -7,8 +7,8 @@ import * as p from "@clack/prompts"
 import pc from "picocolors"
 
 const CREATE_ISSUE_MUTATION = `
-mutation CreateIssue($teamId: String!, $title: String!, $description: String!, $stateId: String!) {
-  issueCreate(input: { teamId: $teamId, title: $title, description: $description, stateId: $stateId }) {
+mutation CreateIssue($teamId: String!, $title: String!, $description: String!, $stateId: String!, $parentId: String) {
+  issueCreate(input: { teamId: $teamId, title: $title, description: $description, stateId: $stateId, parentId: $parentId }) {
     success
     issue {
       id
@@ -122,7 +122,7 @@ async function expandWithClaude(rawInput: string): Promise<IssueInput> {
 
 export async function createIssue(
   input: string | undefined,
-  options?: { yes?: boolean; raw?: boolean },
+  options?: { yes?: boolean; raw?: boolean; parent?: string; blockedBy?: string; breakdown?: boolean },
 ): Promise<void> {
   const autoConfirm = options?.yes ?? false
   const noExpand = options?.raw ?? false
@@ -133,6 +133,21 @@ export async function createIssue(
   if (!apiKey || !teamUuid || !todoStateId) {
     console.log(pc.red("설정이 필요합니다. `bun av setup` 을 먼저 실행하세요."))
     process.exit(1)
+  }
+
+  // --breakdown mode: delegate to breakdown handler
+  if (options?.breakdown) {
+    if (!input) {
+      const t = await p.text({ message: "분해할 기능을 설명해주세요", placeholder: "인증 시스템 구축" })
+      if (p.isCancel(t)) {
+        p.cancel("취소되었습니다")
+        process.exit(0)
+      }
+      input = t
+    }
+    const { executeBreakdown } = await import("./breakdown")
+    await executeBreakdown(input, { yes: autoConfirm })
+    return
   }
 
   let title: string
@@ -182,9 +197,33 @@ export async function createIssue(
     }
   }
 
+  // Resolve --parent identifier to UUID
+  let parentId: string | null = null
+  if (options?.parent) {
+    s.start(`부모 이슈 확인 중 (${options.parent})...`)
+    try {
+      const { fetchIssueByIdentifier } = await import("../tracker/linear-client")
+      const found = await fetchIssueByIdentifier(apiKey, teamUuid, options.parent)
+      if (!found) throw new Error(`이슈를 찾을 수 없습니다: ${options.parent}`)
+      parentId = found.id
+      s.stop(pc.green(`부모 이슈: ${found.identifier}`))
+    } catch (e) {
+      s.stop(pc.red("부모 이슈 확인 실패"))
+      console.log(pc.red((e as Error).message))
+      process.exit(1)
+    }
+  }
+
   // Show preview and confirm
   const scoreDisplay = score !== null ? `\n${pc.cyan(`난이도: score:${score}`)}` : ""
-  p.note([`${pc.bold(title)}`, "", description || pc.dim("(설명 없음)"), scoreDisplay].join("\n"), "이슈 미리보기")
+  const parentDisplay = parentId ? `\n${pc.magenta(`부모: ${options?.parent}`)}` : ""
+  const blockerDisplay = options?.blockedBy ? `\n${pc.yellow(`blocked by: ${options.blockedBy}`)}` : ""
+  p.note(
+    [`${pc.bold(title)}`, "", description || pc.dim("(설명 없음)"), scoreDisplay, parentDisplay, blockerDisplay].join(
+      "\n",
+    ),
+    "이슈 미리보기",
+  )
 
   if (!autoConfirm) {
     const confirmed = await p.confirm({ message: "이대로 생성할까요?" })
@@ -203,14 +242,16 @@ export async function createIssue(
       headers: { Authorization: apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({
         query: CREATE_ISSUE_MUTATION,
-        variables: { teamId: teamUuid, title, description, stateId: todoStateId },
+        variables: { teamId: teamUuid, title, description, stateId: todoStateId, parentId },
       }),
     })
 
     if (!res.ok) throw new Error(`Linear API HTTP ${res.status}`)
 
     const result = (await res.json()) as {
-      data?: { issueCreate?: { success: boolean; issue?: { identifier: string; title: string; url: string } } }
+      data?: {
+        issueCreate?: { success: boolean; issue?: { id: string; identifier: string; title: string; url: string } }
+      }
       errors?: { message: string }[]
     }
 
@@ -230,18 +271,27 @@ export async function createIssue(
       }
     }
 
+    // Create blocked-by relation if specified
+    if (options?.blockedBy) {
+      try {
+        const { fetchIssueByIdentifier, createIssueRelation } = await import("../tracker/linear-client")
+        const blocker = await fetchIssueByIdentifier(apiKey, teamUuid, options.blockedBy)
+        if (blocker) {
+          await createIssueRelation(apiKey, issue.id, blocker.id, "blocked-by")
+        }
+      } catch {
+        // Non-critical: relation creation failure logged but doesn't block
+      }
+    }
+
     s.stop(pc.green(`이슈 생성 완료: ${issue.identifier}`))
 
-    p.note(
-      [
-        `${pc.bold(issue.identifier)}: ${issue.title}`,
-        "",
-        pc.dim(issue.url),
-        "",
-        `상태: ${pc.green("Todo")} → 서버가 실행 중이면 자동으로 에이전트가 시작됩니다`,
-      ].join("\n"),
-      "Created",
-    )
+    const infoLines = [`${pc.bold(issue.identifier)}: ${issue.title}`, "", pc.dim(issue.url), ""]
+    if (parentId) infoLines.push(`${pc.magenta("Sub-issue of")} ${options?.parent}`)
+    if (options?.blockedBy) infoLines.push(`${pc.yellow("Blocked by")} ${options.blockedBy}`)
+    infoLines.push(`상태: ${pc.green("Todo")} → 서버가 실행 중이면 자동으로 에이전트가 시작됩니다`)
+
+    p.note(infoLines.join("\n"), "Created")
   } catch (e) {
     s.stop(pc.red("이슈 생성 실패"))
     console.log(pc.red((e as Error).message))

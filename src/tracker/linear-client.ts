@@ -2,7 +2,7 @@
  * Linear Client — GraphQL API for issue queries and mutations.
  */
 
-import type { Issue } from "../domain/models"
+import type { Issue, IssueRelation } from "../domain/models"
 import { parseScoreFromLabels } from "../domain/models"
 import { logger } from "../observability/logger"
 import type { LinearGraphQLResponse, LinearIssueNode, LinearMutationData, LinearTeamIssuesData } from "./types"
@@ -67,6 +67,9 @@ query GetIssuesByState($teamId: String!, $stateIds: [ID!]!, $cursor: String) {
         state { id name type }
         team { id key }
         labels { nodes { name } }
+        parent { id identifier }
+        children { nodes { id identifier state { id name type } } }
+        relations { nodes { type relatedIssue { id identifier state { id name type } } } }
       }
       pageInfo {
         hasNextPage
@@ -239,7 +242,93 @@ async function fetchIssueLabelsById(apiKey: string, issueId: string): Promise<st
   return data?.issue?.labels?.nodes?.map((l) => l.id) ?? []
 }
 
+// ── Sub-Issue & Relation Mutations ──────────────────────────────────
+
+const CREATE_SUB_ISSUE_MUTATION = `
+mutation CreateSubIssue($teamId: String!, $parentId: String!, $title: String!, $description: String!, $stateId: String!) {
+  issueCreate(input: { teamId: $teamId, parentId: $parentId, title: $title, description: $description, stateId: $stateId }) {
+    success
+    issue { id identifier title url }
+  }
+}
+`
+
+export async function createSubIssue(
+  apiKey: string,
+  teamId: string,
+  parentId: string,
+  title: string,
+  description: string,
+  stateId: string,
+): Promise<{ id: string; identifier: string; title: string; url: string }> {
+  const data = await linearGraphQL<LinearMutationData>(apiKey, CREATE_SUB_ISSUE_MUTATION, {
+    teamId,
+    parentId,
+    title,
+    description,
+    stateId,
+  })
+  if (!data?.issueCreate?.success || !data.issueCreate.issue) {
+    throw new Error(`Failed to create sub-issue under parent ${parentId}`)
+  }
+  return data.issueCreate.issue
+}
+
+const CREATE_RELATION_MUTATION = `
+mutation CreateIssueRelation($issueId: String!, $relatedIssueId: String!, $type: String!) {
+  issueRelationCreate(input: { issueId: $issueId, relatedIssueId: $relatedIssueId, type: $type }) {
+    issueRelation { id type }
+  }
+}
+`
+
+export async function createIssueRelation(
+  apiKey: string,
+  issueId: string,
+  relatedIssueId: string,
+  type: string,
+): Promise<void> {
+  await linearGraphQL<LinearMutationData>(apiKey, CREATE_RELATION_MUTATION, {
+    issueId,
+    relatedIssueId,
+    type,
+  })
+}
+
+const ISSUE_BY_IDENTIFIER_QUERY = `
+query GetIssueByIdentifier($teamId: String!, $identifier: String!) {
+  team(id: $teamId) {
+    issues(filter: { identifier: { eq: $identifier } }, first: 1) {
+      nodes { id identifier }
+    }
+  }
+}
+`
+
+export async function fetchIssueByIdentifier(
+  apiKey: string,
+  teamUuid: string,
+  identifier: string,
+): Promise<{ id: string; identifier: string } | null> {
+  const data = await linearGraphQL<{ team?: { issues?: { nodes: Array<{ id: string; identifier: string }> } } }>(
+    apiKey,
+    ISSUE_BY_IDENTIFIER_QUERY,
+    { teamId: teamUuid, identifier },
+  )
+  return data?.team?.issues?.nodes?.[0] ?? null
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────
+
+function mapRelationType(type: string): IssueRelation["type"] {
+  const map: Record<string, IssueRelation["type"]> = {
+    blocks: "blocks",
+    "blocked-by": "blocked_by",
+    related: "related",
+    duplicate: "duplicate",
+  }
+  return map[type] ?? "related"
+}
 
 function nodeToIssue(node: LinearIssueNode): Issue {
   const labels = node.labels?.nodes?.map((l) => l.name) ?? []
@@ -253,5 +342,13 @@ function nodeToIssue(node: LinearIssueNode): Issue {
     team: node.team,
     labels,
     score: parseScoreFromLabels(labels),
+    parentId: node.parent?.id ?? null,
+    children: node.children?.nodes?.map((c) => c.id) ?? [],
+    relations:
+      node.relations?.nodes?.map((r) => ({
+        type: mapRelationType(r.type),
+        relatedIssueId: r.relatedIssue.id,
+        relatedIdentifier: r.relatedIssue.identifier,
+      })) ?? [],
   }
 }

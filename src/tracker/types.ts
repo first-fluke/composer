@@ -6,12 +6,23 @@ import { z } from "zod/v4"
 import type { Issue } from "../domain/models"
 
 export interface WebhookEvent {
+  kind?: undefined
   action: "create" | "update" | "remove"
   issueId: string
   issue: Issue
   stateId: string
   prevStateId: string | null
 }
+
+export interface RelationWebhookEvent {
+  kind: "relation"
+  action: "create" | "remove"
+  issueId: string
+  relatedIssueId: string
+  relationType: string
+}
+
+export type ParsedWebhookEvent = WebhookEvent | RelationWebhookEvent
 
 export interface LinearGraphQLResponse<T = LinearTeamIssuesData> {
   data?: T
@@ -33,6 +44,8 @@ export interface LinearTeamIssuesData {
 export interface LinearMutationData {
   issueUpdate?: { success: boolean }
   commentCreate?: { success: boolean }
+  issueCreate?: { success: boolean; issue?: { id: string; identifier: string; title: string; url: string } }
+  issueRelationCreate?: { issueRelation?: { id: string; type: string } }
 }
 
 export interface LinearIssueNode {
@@ -44,9 +57,23 @@ export interface LinearIssueNode {
   state: { id: string; name: string; type: string }
   team: { id: string; key: string }
   labels: { nodes: Array<{ name: string }> }
+  parent?: { id: string; identifier: string } | null
+  children?: { nodes: Array<{ id: string; identifier: string; state: { id: string; name: string; type: string } }> }
+  relations?: {
+    nodes: Array<{
+      type: string
+      relatedIssue: { id: string; identifier: string; state: { id: string; name: string; type: string } }
+    }>
+  }
 }
 
 // ── Zod Schemas for Runtime Validation ──────────────────────────────
+
+const linearRelatedIssueSchema = z.object({
+  id: z.string(),
+  identifier: z.string(),
+  state: z.object({ id: z.string(), name: z.string(), type: z.string() }),
+})
 
 export const linearIssueNodeSchema = z.object({
   id: z.string(),
@@ -62,6 +89,24 @@ export const linearIssueNodeSchema = z.object({
   labels: z
     .object({
       nodes: z.array(z.object({ name: z.string() })),
+    })
+    .optional()
+    .default({ nodes: [] }),
+  parent: z.object({ id: z.string(), identifier: z.string() }).nullable().optional().default(null),
+  children: z
+    .object({
+      nodes: z.array(linearRelatedIssueSchema),
+    })
+    .optional()
+    .default({ nodes: [] }),
+  relations: z
+    .object({
+      nodes: z.array(
+        z.object({
+          type: z.string(),
+          relatedIssue: linearRelatedIssueSchema,
+        }),
+      ),
     })
     .optional()
     .default({ nodes: [] }),

@@ -65,6 +65,11 @@ function makeIssue(overrides: Partial<Issue> = {}): Issue {
     url: "https://linear.app/acr/issue/ACR-42",
     status: { id: "s1", name: "In Progress", type: "started" },
     team: { id: "t1", key: "ACR" },
+    labels: [],
+    score: null,
+    parentId: null,
+    children: [],
+    relations: [],
     ...overrides,
   }
 }

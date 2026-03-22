@@ -2,6 +2,7 @@
  * Webhook Handler tests — signature verification and payload parsing.
  */
 import { describe, expect, test } from "bun:test"
+import type { RelationWebhookEvent, WebhookEvent } from "../tracker/types"
 import { parseWebhookEvent, verifyWebhookSignature } from "../tracker/webhook-handler.ts"
 
 // ── Helper: compute HMAC-SHA256 hex digest ──────────────────────────
@@ -13,6 +14,12 @@ async function computeHmac(payload: string, secret: string): Promise<string> {
   ])
   const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(payload))
   return Buffer.from(sig).toString("hex")
+}
+
+function asIssueEvent(event: unknown): WebhookEvent {
+  const e = event as WebhookEvent
+  if (e && !("kind" in e && (e as Record<string, unknown>).kind === "relation")) return e
+  throw new Error("Expected WebhookEvent, got RelationWebhookEvent")
 }
 
 // ── verifyWebhookSignature ──────────────────────────────────────────
@@ -73,14 +80,13 @@ function makePayload(overrides: Record<string, unknown> = {}): string {
 
 describe("parseWebhookEvent", () => {
   test("valid Issue update event returns WebhookEvent", () => {
-    const event = parseWebhookEvent(makePayload())
-    expect(event).not.toBeNull()
-    expect(event?.action).toBe("update")
-    expect(event?.issueId).toBe("issue-123")
-    expect(event?.issue.identifier).toBe("ACR-42")
-    expect(event?.issue.title).toBe("Fix the bug")
-    expect(event?.stateId).toBe("state-ip")
-    expect(event?.prevStateId).toBe("state-todo")
+    const event = asIssueEvent(parseWebhookEvent(makePayload()))
+    expect(event.action).toBe("update")
+    expect(event.issueId).toBe("issue-123")
+    expect(event.issue.identifier).toBe("ACR-42")
+    expect(event.issue.title).toBe("Fix the bug")
+    expect(event.stateId).toBe("state-ip")
+    expect(event.prevStateId).toBe("state-todo")
   })
 
   test("non-Issue type returns null", () => {
@@ -116,12 +122,11 @@ describe("parseWebhookEvent", () => {
         // no state, no team
       },
     })
-    const event = parseWebhookEvent(payload)
-    expect(event).not.toBeNull()
-    expect(event?.issue.status.id).toBe("")
-    expect(event?.issue.status.name).toBe("")
-    expect(event?.issue.team.id).toBe("")
-    expect(event?.issue.team.key).toBe("")
+    const event = asIssueEvent(parseWebhookEvent(payload))
+    expect(event.issue.status.id).toBe("")
+    expect(event.issue.status.name).toBe("")
+    expect(event.issue.team.id).toBe("")
+    expect(event.issue.team.key).toBe("")
   })
 
   test("missing updatedFrom sets prevStateId to null", () => {
@@ -136,8 +141,58 @@ describe("parseWebhookEvent", () => {
         team: { id: "t1", key: "ACR" },
       },
     })
-    const event = parseWebhookEvent(payload)
+    const event = asIssueEvent(parseWebhookEvent(payload))
+    expect(event.prevStateId).toBeNull()
+  })
+})
+
+// ── IssueRelation webhook events ────────────────────────────────────
+
+describe("parseWebhookEvent — IssueRelation", () => {
+  test("valid IssueRelation create event", () => {
+    const payload = JSON.stringify({
+      type: "IssueRelation",
+      action: "create",
+      data: {
+        id: "rel-1",
+        type: "blocks",
+        issueId: "issue-A",
+        relatedIssueId: "issue-B",
+      },
+    })
+    const event = parseWebhookEvent(payload) as RelationWebhookEvent
     expect(event).not.toBeNull()
-    expect(event?.prevStateId).toBeNull()
+    expect(event.kind).toBe("relation")
+    expect(event.action).toBe("create")
+    expect(event.issueId).toBe("issue-A")
+    expect(event.relatedIssueId).toBe("issue-B")
+    expect(event.relationType).toBe("blocks")
+  })
+
+  test("valid IssueRelation remove event", () => {
+    const payload = JSON.stringify({
+      type: "IssueRelation",
+      action: "remove",
+      data: {
+        id: "rel-2",
+        type: "blocked-by",
+        issueId: "issue-X",
+        relatedIssueId: "issue-Y",
+      },
+    })
+    const event = parseWebhookEvent(payload) as RelationWebhookEvent
+    expect(event).not.toBeNull()
+    expect(event.kind).toBe("relation")
+    expect(event.action).toBe("remove")
+  })
+
+  test("IssueRelation with missing fields returns null", () => {
+    const payload = JSON.stringify({
+      type: "IssueRelation",
+      action: "create",
+      data: { id: "rel-3" },
+    })
+    const event = parseWebhookEvent(payload)
+    expect(event).toBeNull()
   })
 })

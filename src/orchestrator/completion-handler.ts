@@ -10,17 +10,20 @@ import { logger } from "../observability/logger"
 import { addIssueComment, updateIssueState } from "../tracker/linear-client"
 import type { WorkspaceManager } from "../workspace/workspace-manager"
 import type { RunCallbacks } from "./agent-runner"
-import { buildWorkSummary } from "./helpers"
+import type { DagScheduler } from "./dag-scheduler"
+import { buildParentSummary, buildWorkSummary } from "./helpers"
 
 export interface CompletionDeps {
   config: Config
   workspaceManager: WorkspaceManager
+  dagScheduler: DagScheduler
   /** Update orchestrator state on completion/failure. Orchestrator remains sole state authority. */
   cleanupState: (issueId: string, status: "done" | "failed") => void
   saveAttempt: (workspace: Workspace, attempt: RunAttempt) => void
   addRetry: (issueId: string, attemptCount: number, error: string) => boolean
   emitEvent: (event: string, payload: Record<string, unknown>) => void
   fillVacantSlots: () => Promise<void>
+  triggerUnblocked: (issueIds: string[]) => Promise<void>
 }
 
 export function createCompletionCallbacks(
@@ -160,6 +163,26 @@ export function createCompletionCallbacks(
         autoCommitted,
         hasCodeChanges,
       })
+
+      // ── DAG cascade: unblock waiting issues ──
+      deps.dagScheduler.updateNodeStatus(issue.id, "done")
+      const unblocked = deps.dagScheduler.getUnblockedByCompletion(issue.id)
+      if (unblocked.length > 0) {
+        logger.info("completion", `${issue.identifier} completion unblocks ${unblocked.length} issue(s)`)
+        await deps.triggerUnblocked(unblocked)
+      }
+
+      // ── DAG: parent auto-complete ──
+      if (issue.parentId && deps.dagScheduler.allChildrenDone(issue.parentId)) {
+        const children = deps.dagScheduler.getChildrenSummaries(issue.parentId)
+        try {
+          await addIssueComment(config.linearApiKey, issue.parentId, buildParentSummary(children))
+          await updateIssueState(config.linearApiKey, issue.parentId, config.workflowStates.done)
+          logger.info("completion", `Parent ${issue.parentId} auto-completed (all children done)`)
+        } catch (err) {
+          logger.warn("completion", "Failed to auto-complete parent", { parentId: issue.parentId, error: String(err) })
+        }
+      }
 
       await deps.fillVacantSlots()
     },
