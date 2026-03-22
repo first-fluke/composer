@@ -18,8 +18,8 @@ Symphony Dev Template — an agent orchestration platform that receives Linear w
 ## Commands
 
 ```bash
-# Run the server
-bun run src/main.ts
+# Start dashboard + orchestrator + ngrok
+bun av dev
 
 # Validate architecture (secret detection, layer violations, forbidden patterns)
 ./scripts/harness/validate.sh
@@ -37,14 +37,14 @@ bun run src/main.ts
 tsc --noEmit
 ```
 
-No unit test runner is configured yet. CI runs `validate.sh` only. Tests are expected alongside implementation per AGENTS.md conventions.
+Tests run via `bun test` (vitest). CI runs `validate.sh` + tests.
 
 ## Architecture (as implemented)
 
 **Clean architecture layers — dependencies point downward only:**
 
 ```
-Presentation   src/server/          HTTP endpoints (/webhook, /status, /health)
+Presentation   dashboard/src/app/api/ Next.js Route Handlers (/api/webhook, /api/status, /api/health)
      ↓
 Application    src/orchestrator/    Orchestrator (state machine), AgentRunnerService, RetryQueue
      ↓
@@ -78,7 +78,7 @@ Infrastructure src/tracker/         Linear GraphQL client + webhook HMAC + state
 
 ## Event Flow
 
-1. Linear sends webhook → `src/server/http-server.ts` receives it
+1. Linear sends webhook → `dashboard/src/app/api/webhook/route.ts` receives it
 2. `src/tracker/webhook-handler.ts` verifies HMAC-SHA256 signature
 3. Orchestrator routes the event:
    - Todo → transition to In Progress via Linear API, then start agent
@@ -99,6 +99,13 @@ Defined in `docs/architecture/CONSTRAINTS.md`. Key rules:
 - Max 500 lines per file
 - No shared mutable state outside Orchestrator
 - Error messages must be actionable (include variable name + fix instructions)
+
+## Issue Creation Rules
+
+When auditing a target repo or creating issues via `bun av issue`:
+1. **Use domain-specialist skills** for audits — `/oma-frontend` for web, `/oma-backend` for API, `/oma-mobile` for mobile. Never use generic Explore agents for framework convention checks.
+2. **Verify framework versions** before reporting convention issues — read `package.json`, `pubspec.yaml`, or `pyproject.toml` first. Conventions change between major versions (e.g. Next.js 16 renamed `middleware.ts` to `proxy.ts`).
+3. **`--raw` issues** bypass Claude expansion — the issuer is responsible for accuracy.
 
 ## Reference Docs
 

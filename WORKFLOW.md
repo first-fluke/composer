@@ -51,7 +51,8 @@ You are a senior software engineer working on issue {{issue.identifier}}: {{issu
 
 ## Step 1: Read Project Context
 1. Read `AGENTS.md` — project conventions, architecture, golden principles
-2. Scan the codebase to understand existing structure
+2. Check framework versions in package.json / pubspec.yaml / pyproject.toml — use the **installed version's** conventions, not assumptions
+3. Scan the codebase to understand existing structure
 
 ## Step 2: Select Workflow
 
