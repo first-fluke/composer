@@ -4,12 +4,14 @@
  * CLI entry point — `bun av`
  *
  * Commands:
- *   (default)  Check config, then start server
+ *   (default)  Check config, then start dashboard
  *   setup      Interactive setup wizard
- *   dev        Server + file watcher (auto-restart on changes)
+ *   dev        Dashboard + orchestrator + ngrok tunnel
  *   status     Query running server status
  */
 
+import { type ChildProcess, spawn, spawnSync } from "node:child_process"
+import { existsSync } from "node:fs"
 import { program } from "commander"
 import pc from "picocolors"
 
@@ -42,51 +44,89 @@ program
 // ── dev ──────────────────────────────────────────────────────────────────────
 program
   .command("dev")
-  .description("Start server with file watching (auto-restart)")
+  .description("Start dashboard + orchestrator + ngrok tunnel")
   .action(async () => {
-    if (!(await Bun.file(".env").exists())) {
+    if (!existsSync(".env")) {
       console.log(pc.yellow("No .env found. Running setup first...\n"))
       const { setup } = await import("./setup")
       await setup()
       console.log()
     }
 
-    const chokidar = await import("chokidar")
+    const port = process.env.SERVER_PORT ?? "9741"
 
-    let proc: ReturnType<typeof Bun.spawn> | null = null
+    // Start Next.js dashboard (includes orchestrator via instrumentation.ts)
+    let dashProc: ChildProcess | null = null
 
-    const start = () => {
-      proc = Bun.spawn(["bun", "run", "src/main.ts"], {
-        stdin: "inherit",
-        stdout: "inherit",
-        stderr: "inherit",
+    const startDashboard = () => {
+      dashProc = spawn("bun", ["run", "dev"], {
+        cwd: "dashboard",
+        stdio: "inherit",
       })
-      console.log(pc.green(`▶ Server started (pid: ${proc.pid})`))
+      console.log(pc.green(`▶ Dashboard started (pid: ${dashProc.pid}) → http://localhost:${port}`))
     }
 
-    const restart = async () => {
-      if (proc) {
-        proc.kill()
-        await proc.exited
-        console.log(pc.yellow("↻ Restarting..."))
+    startDashboard()
+
+    // Start ngrok tunnel for Linear webhooks
+    let ngrokProc: ChildProcess | null = null
+    let ngrokUrl: string | null = null
+
+    const startNgrok = () => {
+      const which = spawnSync("which", ["ngrok"])
+      if (which.status !== 0) {
+        console.log(pc.yellow("⚠ ngrok not found — Linear webhooks won't reach localhost"))
+        console.log(pc.dim("  Install: brew install ngrok"))
+        return
       }
-      start()
+
+      ngrokProc = spawn("ngrok", ["http", port, "--log", "stdout", "--log-format", "json"], {
+        stdio: ["ignore", "pipe", "pipe"],
+      })
+
+      const timeout = setTimeout(() => {
+        if (!ngrokUrl) console.log(pc.yellow("⚠ ngrok started but URL detection timed out — check ngrok dashboard"))
+      }, 10_000)
+
+      ngrokProc.stdout?.on("data", (chunk: Buffer) => {
+        for (const line of chunk.toString().split("\n")) {
+          if (!line.trim()) continue
+          try {
+            const log = JSON.parse(line)
+            if (log.url?.startsWith("https://")) {
+              ngrokUrl = log.url
+              clearTimeout(timeout)
+              console.log(pc.green(`▶ ngrok tunnel → ${ngrokUrl}`))
+              console.log(pc.dim(`  Set Linear webhook URL to: ${ngrokUrl}/api/webhook`))
+            }
+          } catch {
+            // not JSON, skip
+          }
+        }
+      })
     }
 
-    start()
+    startNgrok()
 
+    // Watch config files for restart
+    const chokidar = await import("chokidar")
     const watcher = chokidar.watch(["WORKFLOW.md", ".env"], {
       ignoreInitial: true,
     })
 
     watcher.on("change", (path: string) => {
       console.log(pc.dim(`  changed: ${path}`))
-      restart()
+      if (dashProc) {
+        dashProc.kill()
+        console.log(pc.yellow("↻ Restarting dashboard..."))
+      }
+      startDashboard()
     })
 
     const shutdown = () => {
       watcher.close()
-      proc?.kill()
+      dashProc?.kill()
+      ngrokProc?.kill()
       process.exit(0)
     }
 
@@ -126,7 +166,7 @@ program
   .action(async () => {
     const port = process.env.SERVER_PORT ?? "9741"
     try {
-      const res = await fetch(`http://localhost:${port}/status`)
+      const res = await fetch(`http://localhost:${port}/api/status`)
       const data = await res.json()
       console.log(JSON.stringify(data, null, 2))
     } catch {
@@ -152,25 +192,19 @@ program
     await logout()
   })
 
-// ── default: start server ────────────────────────────────────────────────────
+// ── default: start dashboard ─────────────────────────────────────────────────
 program.action(async () => {
-  if (!(await Bun.file(".env").exists())) {
+  if (!existsSync(".env")) {
     const { setup } = await import("./setup")
     await setup()
     console.log()
-
-    // Spawn fresh process so Bun picks up the newly created .env
-    const proc = Bun.spawn(["bun", "run", "src/main.ts"], {
-      stdin: "inherit",
-      stdout: "inherit",
-      stderr: "inherit",
-    })
-    await proc.exited
-    process.exit(proc.exitCode ?? 0)
-    return
   }
 
-  await import("../main")
+  const proc = spawn("bun", ["run", "dev"], {
+    cwd: "dashboard",
+    stdio: "inherit",
+  })
+  proc.on("exit", (code) => process.exit(code ?? 0))
 })
 
 program.parse()

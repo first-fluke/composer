@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "av": "bun run src/cli/index.ts",
-    "start": "bun run src/main.ts",
+    "start": "bun run --cwd dashboard dev",
     "lint": "biome check .",
     "lint:fix": "biome check --fix .",
     "test": "bun vitest run",
