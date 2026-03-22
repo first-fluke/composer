@@ -1,0 +1,12 @@
+{
+  "name": "@agent-valley/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  }
+}

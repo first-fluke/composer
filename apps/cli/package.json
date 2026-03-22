@@ -1,0 +1,19 @@
+{
+  "name": "@agent-valley/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "av": "src/index.ts"
+  },
+  "scripts": {
+    "av": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@agent-valley/core": "workspace:*",
+    "@clack/prompts": "^1.1.0",
+    "chokidar": "^5.0.0",
+    "commander": "^14.0.3",
+    "picocolors": "^1.1.1"
+  }
+}
