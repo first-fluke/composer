@@ -27,7 +27,7 @@ export function parseWorkflow(content: string): ParsedWorkflow {
   }
 
   // YAML front matter is between first and second ---
-  const yamlStr = parts[1]!
+  const yamlStr = parts[1] ?? ""
   const promptTemplate = parts.slice(2).join("---").trim()
 
   // Simple YAML parser for the flat structure we need

@@ -3,13 +3,15 @@
  *
  * Usage:
  *   bun run src/main.ts
+ *
+ * HTTP endpoints are served by the Next.js dashboard (dashboard/).
+ * This process runs the orchestrator only.
  */
 
 import { isTeamMode, loadConfig } from "./config/env"
 import { configureLogger, logger } from "./observability/logger"
 import { Orchestrator } from "./orchestrator/orchestrator"
 import type { LedgerBridge } from "./relay/ledger-bridge"
-import { startHttpServer } from "./server/http-server"
 
 // Load config (exits on validation failure)
 const config = loadConfig()
@@ -37,11 +39,11 @@ if (isTeamMode(config)) {
 
   const nodeId = generateNodeId()
   const publisher = new SupabaseLedgerClient(
-    config.supabaseUrl!,
-    config.supabaseAnonKey!,
+    config.supabaseUrl ?? "",
+    config.supabaseAnonKey ?? "",
     creds.accessToken,
     nodeId,
-    config.teamId!,
+    config.teamId ?? "",
     creds.userId,
   )
   bridge = new Bridge(orchestrator, publisher, nodeId)
@@ -50,11 +52,8 @@ if (isTeamMode(config)) {
 }
 
 // Graceful shutdown
-let httpServer: { stop: () => void } | null = null
-
 const shutdown = async (signal: string) => {
   logger.info("main", `${signal} received`)
-  httpServer?.stop()
   await orchestrator.stop()
   await bridge?.dispose()
   process.exit(0)
@@ -67,7 +66,4 @@ process.on("SIGINT", () => shutdown("SIGINT"))
 logger.info("main", "Symphony Orchestrator starting...")
 await orchestrator.start()
 
-// Start HTTP server (Presentation layer wired to Application layer handlers)
-httpServer = startHttpServer(config.serverPort, orchestrator.getHandlers())
-
-logger.info("main", `Symphony ready — listening on :${config.serverPort}`)
+logger.info("main", "Symphony Orchestrator ready")

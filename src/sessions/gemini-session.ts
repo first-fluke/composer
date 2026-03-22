@@ -81,7 +81,8 @@ export class GeminiSession extends BaseSession {
   private async runOneShotWithPrompt(prompt: string): Promise<void> {
     this.startedAt = Date.now()
 
-    const config = this.config!
+    if (!this.config) throw new Error("GeminiSession: start() must be called before execute()")
+    const config = this.config
     const args = this.buildFallbackArgs(config)
 
     // Pass prompt via stdin to avoid CLI arg injection and temp file issues

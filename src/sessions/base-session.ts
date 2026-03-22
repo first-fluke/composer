@@ -46,12 +46,14 @@ export function buildAgentEnv(agentType: string, extra: Record<string, string> =
   const env: Record<string, string> = {}
 
   for (const key of SAFE_ENV_KEYS) {
-    if (process.env[key] != null) env[key] = process.env[key]!
+    const val = process.env[key]
+    if (val != null) env[key] = val
   }
 
   const agentKeys = AGENT_ENV_KEYS[agentType] ?? []
   for (const key of agentKeys) {
-    if (process.env[key] != null) env[key] = process.env[key]!
+    const val = process.env[key]
+    if (val != null) env[key] = val
   }
 
   return { ...env, ...extra }
@@ -73,7 +75,7 @@ export abstract class BaseSession implements AgentSession {
   protected process: ChildProcess | null = null
   protected startedAt: number = 0
 
-  private listeners = new Map<string, Set<AgentEventHandler<any>>>()
+  private listeners = new Map<string, Set<AgentEventHandler<unknown>>>()
 
   // ── Abstract methods (each session must implement) ────────────────────────
 

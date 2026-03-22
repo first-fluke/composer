@@ -42,7 +42,8 @@ export class DagScheduler {
 
     // Build edges from relations
     for (const issue of issues) {
-      const issueNode = nodes[issue.id]!
+      const issueNode = nodes[issue.id]
+      if (!issueNode) continue
       for (const rel of issue.relations) {
         const relatedNode = nodes[rel.relatedIssueId]
         if (!relatedNode) continue
@@ -72,7 +73,8 @@ export class DagScheduler {
       for (const cycle of cycles) {
         const cycleSet = new Set(cycle)
         for (const id of cycle) {
-          const node = nodes[id]!
+          const node = nodes[id]
+          if (!node) continue
           node.blockedBy = node.blockedBy.filter((bid) => !cycleSet.has(bid))
           node.blocks = node.blocks.filter((bid) => !cycleSet.has(bid))
         }

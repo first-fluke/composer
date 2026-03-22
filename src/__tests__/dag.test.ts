@@ -2,7 +2,7 @@
  * DAG pure function tests — cycle detection, blocker resolution, ready issues, parent completion.
  */
 
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import {
   allChildrenDone,
   detectCycles,

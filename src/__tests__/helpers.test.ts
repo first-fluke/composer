@@ -1,7 +1,7 @@
 /**
  * Orchestrator Helpers tests — buildWorkSummary with auto-commit and diff stat options.
  */
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import type { RunAttempt } from "../domain/models"
 import { buildWorkSummary } from "../orchestrator/helpers"
 

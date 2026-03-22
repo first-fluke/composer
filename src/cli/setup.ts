@@ -66,7 +66,8 @@ export async function linearQuery(apiKey: string, query: string): Promise<Record
   const data = (await res.json()) as { data?: Record<string, unknown>; errors?: { message: string }[] }
   if (data.errors) throw new Error(data.errors[0].message)
 
-  return data.data!
+  if (!data.data) throw new Error("Linear API returned no data")
+  return data.data
 }
 
 export function findWorkflowState(states: WorkflowState[], names: string[], type: string): WorkflowState | undefined {
@@ -209,7 +210,7 @@ async function stepTeam(ctx: Partial<SetupContext>, step: number, total: number)
   if (p.isCancel(teamUuid)) return CANCEL
 
   ctx.teamUuid = teamUuid
-  ctx.selectedTeam = ctx.teams.find((t) => t.id === teamUuid)!
+  ctx.selectedTeam = ctx.teams.find((t) => t.id === teamUuid)
   return
 }
 

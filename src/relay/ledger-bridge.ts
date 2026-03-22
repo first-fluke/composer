@@ -3,9 +3,11 @@
  * Fire-and-forget: Supabase failures must never stop the Orchestrator.
  */
 
-import type { LedgerEventPublisher } from "../domain/ledger"
+import type { LedgerEvent, LedgerEventPublisher, LedgerEventType } from "../domain/ledger"
 import { logger } from "../observability/logger"
 import type { Orchestrator } from "../orchestrator/orchestrator"
+
+type PublishableEvent = Omit<LedgerEvent, "seq" | "relayTimestamp" | "v">
 
 export class LedgerBridge {
   private handlers = new Map<string, (payload: Record<string, unknown>) => void>()
@@ -28,17 +30,16 @@ export class LedgerBridge {
     this.orchestrator.on(event, handler)
   }
 
-  private publish(type: string, payload: Record<string, unknown>): void {
-    this.publisher
-      .publish({
-        type: type as any,
-        nodeId: this.nodeId,
-        clientTimestamp: new Date().toISOString(),
-        payload: payload as any,
-      })
-      .catch((err) => {
-        logger.warn("ledger-bridge", `Failed to publish ${type} event`, { error: String(err) })
-      })
+  private publish(type: LedgerEventType, payload: Record<string, unknown>): void {
+    const event = {
+      type,
+      nodeId: this.nodeId,
+      clientTimestamp: new Date().toISOString(),
+      payload,
+    } as PublishableEvent
+    this.publisher.publish(event).catch((err) => {
+      logger.warn("ledger-bridge", `Failed to publish ${type} event`, { error: String(err) })
+    })
   }
 
   async dispose(): Promise<void> {

@@ -1,7 +1,7 @@
 /**
  * Config Layer tests — loadConfig() validation and error messages.
  */
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { loadConfig } from "../config/env.ts"
 
 /** Minimal valid env vars for loadConfig() to succeed. */
@@ -25,16 +25,16 @@ function validEnv(): Record<string, string> {
 
 describe("loadConfig", () => {
   let originalEnv: NodeJS.ProcessEnv
-  let exitSpy: ReturnType<typeof spyOn>
-  let errorSpy: ReturnType<typeof spyOn>
+  let exitSpy: ReturnType<typeof vi.spyOn>
+  let errorSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     originalEnv = { ...process.env }
     // Prevent actual process.exit — throw instead so we can catch it
-    exitSpy = spyOn(process, "exit").mockImplementation((_code?: number) => {
+    exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: number) => {
       throw new Error(`process.exit(${_code})`)
     })
-    errorSpy = spyOn(console, "error").mockImplementation(() => {})
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
   })
 
   afterEach(() => {
@@ -72,7 +72,7 @@ describe("loadConfig", () => {
     process.env = { ...env }
 
     expect(() => loadConfig()).toThrow("process.exit(1)")
-    const errorOutput = (errorSpy.mock.calls[0] as string[])[0]!
+    const errorOutput = (errorSpy.mock.calls[0] as string[])[0]
     expect(errorOutput).toContain("LINEAR_API_KEY")
     expect(errorOutput).toContain(".env")
   })
@@ -83,7 +83,7 @@ describe("loadConfig", () => {
     process.env = { ...env }
 
     expect(() => loadConfig()).toThrow("process.exit(1)")
-    const errorOutput = (errorSpy.mock.calls[0] as string[])[0]!
+    const errorOutput = (errorSpy.mock.calls[0] as string[])[0]
     expect(errorOutput).toContain("LINEAR_TEAM_ID")
   })
 
@@ -95,7 +95,7 @@ describe("loadConfig", () => {
     process.env = { ...env }
 
     expect(() => loadConfig()).toThrow("process.exit(1)")
-    const errorOutput = (errorSpy.mock.calls[0] as string[])[0]!
+    const errorOutput = (errorSpy.mock.calls[0] as string[])[0]
     expect(errorOutput).toContain("LINEAR_API_KEY")
     expect(errorOutput).toContain("LINEAR_WEBHOOK_SECRET")
     expect(errorOutput).toContain("WORKSPACE_ROOT")
@@ -107,7 +107,7 @@ describe("loadConfig", () => {
     process.env = { ...env }
 
     expect(() => loadConfig()).toThrow("process.exit(1)")
-    const errorOutput = (errorSpy.mock.calls[0] as string[])[0]!
+    const errorOutput = (errorSpy.mock.calls[0] as string[])[0]
     expect(errorOutput).toContain("WORKSPACE_ROOT")
     expect(errorOutput).toContain("absolute path")
   })
@@ -118,7 +118,7 @@ describe("loadConfig", () => {
     process.env = { ...env }
 
     expect(() => loadConfig()).toThrow("process.exit(1)")
-    const errorOutput = (errorSpy.mock.calls[0] as string[])[0]!
+    const errorOutput = (errorSpy.mock.calls[0] as string[])[0]
     expect(errorOutput).toContain("logLevel")
   })
 })

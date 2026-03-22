@@ -1,7 +1,7 @@
 /**
  * RetryQueue tests — exponential backoff scheduling.
  */
-import { beforeEach, describe, expect, test } from "bun:test"
+import { beforeEach, describe, expect, test } from "vitest"
 import { RetryQueue } from "../orchestrator/retry-queue.ts"
 
 describe("RetryQueue", () => {
@@ -101,13 +101,13 @@ describe("RetryQueue", () => {
     const now = Date.now()
 
     q.add("issue-1", 1, "err")
-    const entry1 = q.entries[0]!
-    const delay1 = new Date(entry1.nextRetryAt).getTime() - now
+    const entry1 = q.entries[0]
+    const delay1 = new Date(entry1?.nextRetryAt ?? 0).getTime() - now
 
     q.remove("issue-1")
     q.add("issue-1", 2, "err")
-    const entry2 = q.entries[0]!
-    const delay2 = new Date(entry2.nextRetryAt).getTime() - now
+    const entry2 = q.entries[0]
+    const delay2 = new Date(entry2?.nextRetryAt ?? 0).getTime() - now
 
     // delay2 should be roughly double delay1 (allow 2s tolerance for timing)
     expect(delay1).toBeGreaterThan(55_000) // ~60s

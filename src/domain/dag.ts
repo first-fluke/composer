@@ -35,7 +35,8 @@ export function detectCycles(nodes: Record<string, DagNode>): string[][] {
 
   const visited = new Set<string>()
   while (queue.length > 0) {
-    const id = queue.shift()!
+    const id = queue.shift()
+    if (!id) break
     visited.add(id)
     for (const neighbor of adjacency.get(id) ?? []) {
       const newDegree = (inDegree.get(neighbor) ?? 1) - 1
@@ -70,8 +71,8 @@ export function getUnresolvedBlockers(nodes: Record<string, DagNode>, issueId: s
  */
 export function getReadyIssues(nodes: Record<string, DagNode>): string[] {
   return Object.keys(nodes).filter((id) => {
-    const node = nodes[id]!
-    if (node.status !== "waiting" && node.status !== "ready") return false
+    const node = nodes[id]
+    if (!node || (node.status !== "waiting" && node.status !== "ready")) return false
     return getUnresolvedBlockers(nodes, id).length === 0
   })
 }

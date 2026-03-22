@@ -1,7 +1,7 @@
 /**
  * Workflow Loader tests — YAML parsing, prompt rendering, input sanitization.
  */
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { parseWorkflow, renderPrompt, sanitizeIssueBody } from "../config/workflow-loader.ts"
 import type { Issue, RunAttempt } from "../domain/models.ts"
 

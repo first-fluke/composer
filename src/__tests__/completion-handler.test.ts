@@ -1,7 +1,7 @@
 /**
  * Completion Handler tests — safety-net, delivery, and exit assessment.
  */
-import { beforeEach, describe, expect, test } from "bun:test"
+import { beforeEach, describe, expect, test } from "vitest"
 import type { Config } from "../config/env"
 import type { ResolvedRoute } from "../config/routing"
 import type { Issue, RunAttempt, Workspace } from "../domain/models"

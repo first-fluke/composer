@@ -4,7 +4,7 @@
  * resolveRouteWithScore, and matchScoreTier.
  */
 
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import type { Config } from "../config/env"
 import { resolveRouteWithScore } from "../config/routing"
 import type { Issue } from "../domain/models"

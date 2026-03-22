@@ -1,84 +1,88 @@
 /**
- * HTTP Server integration tests — start a real server, exercise routes.
+ * API Route Handler tests — exercise the Next.js route handlers directly.
+ * Tests the webhook, health, and status route functions in isolation.
  */
-import { afterEach, describe, expect, test } from "bun:test"
-import type { StatusFn, WebhookHandlerFn } from "../server/http-server.ts"
-import { startHttpServer } from "../server/http-server.ts"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 
-// Use a high random port to avoid conflicts
-function randomPort(): number {
-  return 10_000 + Math.floor(Math.random() * 50_000)
-}
+// ── Mock orchestrator singleton ─────────────────────────────────────
 
-describe("HTTP Server", () => {
-  let stopServer: (() => void) | null = null
+let mockOrchestrator: {
+  getStatus: () => Record<string, unknown>
+  handleWebhook: (payload: string, signature: string) => Promise<{ status: number; body: string }>
+} | null = null
 
-  afterEach(() => {
-    if (stopServer) {
-      stopServer()
-      stopServer = null
+vi.mock("@/lib/orchestrator-singleton", () => ({
+  getOrchestrator: () => mockOrchestrator,
+}))
+
+vi.mock("@/lib/env", () => ({
+  env: {
+    AGENT_TYPE: "claude",
+    MAX_PARALLEL: 5,
+    SERVER_PORT: 9741,
+  },
+}))
+
+// ── Import route handlers after mocks ────────────────────────────────
+
+const { GET: healthGET } = await import("../../dashboard/src/app/api/health/route")
+const { GET: statusGET } = await import("../../dashboard/src/app/api/status/route")
+const { POST: webhookPOST } = await import("../../dashboard/src/app/api/webhook/route")
+
+describe("API Route Handlers", () => {
+  beforeEach(() => {
+    mockOrchestrator = {
+      getStatus: () => ({ running: true, activeCount: 0 }),
+      handleWebhook: async () => ({
+        status: 200,
+        body: JSON.stringify({ ok: true }),
+      }),
     }
   })
 
-  function startTestServer(overrides: { onWebhook?: WebhookHandlerFn; getStatus?: StatusFn } = {}) {
-    const port = randomPort()
-    const onWebhook: WebhookHandlerFn =
-      overrides.onWebhook ??
-      (async () => ({
-        status: 200,
-        body: JSON.stringify({ ok: true }),
-      }))
-    const getStatus: StatusFn =
-      overrides.getStatus ??
-      (() => ({
-        running: true,
-        activeCount: 0,
-      }))
+  afterEach(() => {
+    mockOrchestrator = null
+  })
 
-    const server = startHttpServer(port, { onWebhook, getStatus })
-    stopServer = server.stop
-    return { port, server }
-  }
+  // ── /api/health ──────────────────────────────────────────────────
 
   test("GET /health returns 200 with status ok", async () => {
-    const { port } = startTestServer()
-    const res = await fetch(`http://127.0.0.1:${port}/health`)
+    const res = healthGET()
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body).toEqual({ status: "ok" })
   })
 
+  // ── /api/status ──────────────────────────────────────────────────
+
   test("GET /status returns handler result", async () => {
-    const { port } = startTestServer({
-      getStatus: () => ({ running: true, activeCount: 5 }),
-    })
-    const res = await fetch(`http://127.0.0.1:${port}/status`)
+    if (mockOrchestrator) mockOrchestrator.getStatus = () => ({ running: true, activeCount: 5 })
+    const res = statusGET()
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body).toEqual({ running: true, activeCount: 5 })
   })
 
-  test("unknown route returns 404 JSON", async () => {
-    const { port } = startTestServer()
-    const res = await fetch(`http://127.0.0.1:${port}/nonexistent`)
-    expect(res.status).toBe(404)
-    const body = await res.json()
-    expect(body).toEqual({ error: "Not found" })
+  test("GET /status returns 503 when orchestrator not initialized", async () => {
+    mockOrchestrator = null
+    const res = statusGET()
+    expect(res.status).toBe(503)
   })
 
-  test("POST /webhook calls onWebhook handler", async () => {
+  // ── /api/webhook ─────────────────────────────────────────────────
+
+  test("POST /webhook calls handleWebhook", async () => {
     let receivedPayload = ""
     let receivedSignature = ""
 
-    const { port } = startTestServer({
-      onWebhook: async (payload, signature) => {
-        receivedPayload = payload
-        receivedSignature = signature
-        return { status: 200, body: JSON.stringify({ accepted: true }) }
-      },
-    })
+    if (!mockOrchestrator) throw new Error("orchestrator not initialized")
+    mockOrchestrator.handleWebhook = async (payload, signature) => {
+      receivedPayload = payload
+      receivedSignature = signature
+      return { status: 200, body: JSON.stringify({ accepted: true }) }
+    }
 
-    const res = await fetch(`http://127.0.0.1:${port}/webhook`, {
+    const req = new Request("http://localhost/api/webhook", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -87,6 +91,7 @@ describe("HTTP Server", () => {
       body: '{"type":"Issue","action":"update"}',
     })
 
+    const res = await webhookPOST(req)
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body).toEqual({ accepted: true })
@@ -95,33 +100,43 @@ describe("HTTP Server", () => {
   })
 
   test("POST /webhook without application/json Content-Type returns 415", async () => {
-    const { port } = startTestServer()
-    const res = await fetch(`http://127.0.0.1:${port}/webhook`, {
+    const req = new Request("http://localhost/api/webhook", {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
       body: "hello",
     })
+
+    const res = await webhookPOST(req)
     expect(res.status).toBe(415)
     const body = (await res.json()) as { error: string }
     expect(body.error).toContain("application/json")
   })
 
   test("POST /webhook with too-large body returns 413", async () => {
-    const { port } = startTestServer()
-    // Bun's fetch overrides Content-Length to match actual body size,
-    // so we must send a body that actually exceeds the 1MB limit.
     const largeBody = `{"x":"${"a".repeat(1_100_000)}"}`
-    const res = await fetch(`http://127.0.0.1:${port}/webhook`, {
+    const req = new Request("http://localhost/api/webhook", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: largeBody,
     })
+
+    const res = await webhookPOST(req)
     expect(res.status).toBe(413)
   })
 
-  test("GET /webhook returns 404 (only POST is handled)", async () => {
-    const { port } = startTestServer()
-    const res = await fetch(`http://127.0.0.1:${port}/webhook`)
-    expect(res.status).toBe(404)
+  test("POST /webhook returns 503 when orchestrator not initialized", async () => {
+    mockOrchestrator = null
+
+    const req = new Request("http://localhost/api/webhook", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "linear-signature": "sig",
+      },
+      body: '{"type":"Issue"}',
+    })
+
+    const res = await webhookPOST(req)
+    expect(res.status).toBe(503)
   })
 })

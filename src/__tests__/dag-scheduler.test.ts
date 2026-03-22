@@ -2,8 +2,8 @@
  * DagScheduler tests — DAG construction, queries, mutations, persistence.
  */
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { unlink } from "node:fs/promises"
+import { afterEach, beforeEach, describe, expect, test } from "vitest"
 import type { Issue } from "../domain/models"
 import { DagScheduler } from "../orchestrator/dag-scheduler"
 

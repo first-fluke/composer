@@ -2,7 +2,7 @@
  * Breakdown parser tests — parseBreakdownOutput, renderDagPreview.
  */
 
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { parseBreakdownOutput, renderDagPreview } from "../cli/breakdown"
 
 describe("parseBreakdownOutput", () => {

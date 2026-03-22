@@ -256,15 +256,15 @@ export async function createIssue(
     }
 
     if (result.errors) throw new Error(result.errors[0].message)
-    if (!result.data?.issueCreate?.success) throw new Error("Issue creation failed")
+    if (!result.data?.issueCreate?.success || !result.data.issueCreate.issue) throw new Error("Issue creation failed")
 
-    const issue = result.data.issueCreate.issue!
+    const issue = result.data.issueCreate.issue
 
     // Attach score label if available (best-effort, non-blocking)
-    if (score !== null) {
+    if (score !== null && teamUuid) {
       try {
         const { addIssueLabel } = await import("../tracker/linear-client")
-        const teamId = process.env.LINEAR_TEAM_UUID!
+        const teamId = teamUuid
         await addIssueLabel(apiKey, teamId, issue.id, `score:${score}`)
       } catch {
         // Non-critical: label attachment failure doesn't block issue creation

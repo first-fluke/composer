@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, mock } from "bun:test"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import type { EnvConfig, WorkflowState } from "./setup"
 import { buildEnvContent, findWorkflowState, linearQuery, maskApiKey } from "./setup"
 
@@ -154,10 +154,10 @@ describe("linearQuery", () => {
   it("sends correct headers and body", async () => {
     let capturedInit: RequestInit | undefined
 
-    globalThis.fetch = mock(async (_url: string | URL | Request, init?: RequestInit) => {
+    globalThis.fetch = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       capturedInit = init
       return new Response(JSON.stringify({ data: { ok: true } }), { status: 200 })
-    }) as any
+    }) as typeof fetch
 
     await linearQuery("lin_api_key123", "{ teams { nodes { id } } }")
 
@@ -170,24 +170,24 @@ describe("linearQuery", () => {
   })
 
   it("returns data on success", async () => {
-    globalThis.fetch = mock(
+    globalThis.fetch = vi.fn(
       async () => new Response(JSON.stringify({ data: { teams: { nodes: [{ id: "1" }] } } }), { status: 200 }),
-    ) as any
+    ) as typeof fetch
 
     const result = await linearQuery("key", "{ teams { nodes { id } } }")
     expect(result.teams.nodes[0].id).toBe("1")
   })
 
   it("throws on HTTP error", async () => {
-    globalThis.fetch = mock(async () => new Response("Unauthorized", { status: 401 })) as any
+    globalThis.fetch = vi.fn(async () => new Response("Unauthorized", { status: 401 })) as typeof fetch
 
     expect(linearQuery("bad_key", "{ viewer { id } }")).rejects.toThrow("Linear API HTTP 401")
   })
 
   it("throws on GraphQL error", async () => {
-    globalThis.fetch = mock(
+    globalThis.fetch = vi.fn(
       async () => new Response(JSON.stringify({ errors: [{ message: "Invalid query" }] }), { status: 200 }),
-    ) as any
+    ) as typeof fetch
 
     expect(linearQuery("key", "{ bad }")).rejects.toThrow("Invalid query")
   })

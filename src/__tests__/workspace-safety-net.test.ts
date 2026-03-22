@@ -2,11 +2,12 @@
  * Workspace Manager safety-net tests — detectUnfinishedWork, autoCommit, getDiffStat, pushBranch.
  * Uses a real temporary git repo to test actual git operations.
  */
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+
 import { execSync } from "node:child_process"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { afterEach, beforeEach, describe, expect, test } from "vitest"
 import type { Workspace } from "../domain/models"
 import { WorkspaceManager } from "../workspace/workspace-manager"
 

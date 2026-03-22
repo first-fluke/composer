@@ -99,7 +99,8 @@ export function renderDagPreview(result: BreakdownResult): string {
   ]
 
   for (let i = 0; i < result.subIssues.length; i++) {
-    const sub = result.subIssues[i]!
+    const sub = result.subIssues[i]
+    if (!sub) continue
     const isLast = i === result.subIssues.length - 1
     const prefix = isLast ? "└── " : "├── "
     const blockedStr =
@@ -206,7 +207,8 @@ export async function executeBreakdown(input: string, opts: { yes?: boolean }): 
   s.start(`하위 이슈 생성 중 (0/${result.subIssues.length})...`)
 
   for (let i = 0; i < result.subIssues.length; i++) {
-    const sub = result.subIssues[i]!
+    const sub = result.subIssues[i]
+    if (!sub) continue
     try {
       const created = await createSubIssue(apiKey, teamUuid, parentIssue.id, sub.title, sub.description, todoStateId)
       createdIds.push({ id: created.id, identifier: created.identifier, index: i + 1 })
@@ -223,7 +225,8 @@ export async function executeBreakdown(input: string, opts: { yes?: boolean }): 
   // Step 5: Create relations
   let relationsCreated = 0
   for (const created of createdIds) {
-    const sub = result.subIssues[created.index - 1]!
+    const sub = result.subIssues[created.index - 1]
+    if (!sub) continue
     for (const blockerIdx of sub.blockedByIndices) {
       const blocker = createdIds.find((c) => c.index === blockerIdx)
       if (blocker) {
@@ -248,7 +251,8 @@ export async function executeBreakdown(input: string, opts: { yes?: boolean }): 
     "",
   ]
   for (const created of createdIds) {
-    const sub = result.subIssues[created.index - 1]!
+    const sub = result.subIssues[created.index - 1]
+    if (!sub) continue
     const blockedStr =
       sub.blockedByIndices.length > 0
         ? pc.dim(

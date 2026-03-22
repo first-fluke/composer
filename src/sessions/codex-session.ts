@@ -150,7 +150,8 @@ export class CodexSession extends BaseSession {
   private handleMessage(msg: JsonRpcResponse): void {
     // Response to a request we made
     if (msg.id != null && this.pendingResolvers.has(msg.id)) {
-      const resolver = this.pendingResolvers.get(msg.id)!
+      const resolver = this.pendingResolvers.get(msg.id)
+      if (!resolver) return
       this.pendingResolvers.delete(msg.id)
       if (msg.error) {
         resolver.reject(new Error(msg.error.message))

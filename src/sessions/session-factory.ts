@@ -20,25 +20,25 @@ export class SessionRegistry {
    * Register a session implementation for an agent type.
    * Overwrites any existing registration for the same type.
    */
-  register(type: string, constructor: SessionConstructor): void {
-    this.registry.set(type, constructor)
+  register(agentType: string, factory: SessionConstructor): void {
+    this.registry.set(agentType, factory)
   }
 
   /**
    * Create a new AgentSession instance for the given agent type.
    * Throws if the type is not registered.
    */
-  create(type: string): AgentSession {
-    const constructor = this.registry.get(type)
-    if (!constructor) {
+  create(agentType: string): AgentSession {
+    const factory = this.registry.get(agentType)
+    if (!factory) {
       const available = Array.from(this.registry.keys()).join(", ") || "(none)"
       throw new Error(
-        `Unknown agent type: "${type}". ` +
+        `Unknown agent type: "${agentType}". ` +
           `Available: ${available}. ` +
-          `Register custom agents via registerSession("${type}", () => new YourSession())`,
+          `Register custom agents via registerSession("${agentType}", () => new YourSession())`,
       )
     }
-    return constructor()
+    return factory()
   }
 
   /**
@@ -68,12 +68,12 @@ export const defaultRegistry = new SessionRegistry()
 
 // ── Backward-compatible function exports ─────────────────────────────────────
 
-export function registerSession(type: string, constructor: SessionConstructor): void {
-  defaultRegistry.register(type, constructor)
+export function registerSession(agentType: string, factory: SessionConstructor): void {
+  defaultRegistry.register(agentType, factory)
 }
 
-export function createSession(type: string): AgentSession {
-  return defaultRegistry.create(type)
+export function createSession(agentType: string): AgentSession {
+  return defaultRegistry.create(agentType)
 }
 
 export function listSessionTypes(): string[] {

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import type { LedgerEvent } from "../domain/ledger"
 import { replayLedger } from "./replay"
 
@@ -30,7 +30,8 @@ describe("replayLedger", () => {
     ]
     const state = replayLedger(events)
     expect(state.nodes.size).toBe(1)
-    const node = state.nodes.get("gahyun:macbook")!
+    const node = state.nodes.get("gahyun:macbook")
+    expect(node).toBeDefined()
     expect(node.displayName).toBe("가현")
     expect(node.online).toBe(true)
     expect(node.activeIssues).toEqual([])
@@ -50,7 +51,8 @@ describe("replayLedger", () => {
       }),
     ]
     const state = replayLedger(events)
-    const node = state.nodes.get("gahyun:macbook")!
+    const node = state.nodes.get("gahyun:macbook")
+    expect(node).toBeDefined()
     expect(node.activeIssues).toHaveLength(1)
     expect(node.activeIssues[0].issueKey).toBe("FIR-12")
   })
@@ -70,7 +72,8 @@ describe("replayLedger", () => {
       makeEvent({ seq: 3, type: "agent.done", payload: { issueKey: "FIR-12", issueId: "id-12", durationMs: 5000 } }),
     ]
     const state = replayLedger(events)
-    const node = state.nodes.get("gahyun:macbook")!
+    const node = state.nodes.get("gahyun:macbook")
+    expect(node).toBeDefined()
     expect(node.activeIssues).toHaveLength(0)
   })
 
@@ -94,7 +97,8 @@ describe("replayLedger", () => {
       makeEvent({ seq: 4, type: "node.leave", payload: { reason: "crash" } }),
     ]
     const state = replayLedger(events)
-    const node = state.nodes.get("gahyun:macbook")!
+    const node = state.nodes.get("gahyun:macbook")
+    expect(node).toBeDefined()
     expect(node.online).toBe(false)
     expect(node.activeIssues).toHaveLength(0)
   })
@@ -118,7 +122,8 @@ describe("replayLedger", () => {
       }),
     ]
     const state = replayLedger(events)
-    const node = state.nodes.get("gahyun:macbook")!
+    const node = state.nodes.get("gahyun:macbook")
+    expect(node).toBeDefined()
     expect(node.activeIssues).toHaveLength(1)
   })
 
@@ -132,7 +137,8 @@ describe("replayLedger", () => {
       makeEvent({ seq: 2, type: "agent.done", payload: { issueKey: "FIR-99", issueId: "id-99", durationMs: 1000 } }),
     ]
     const state = replayLedger(events)
-    const node = state.nodes.get("gahyun:macbook")!
+    const node = state.nodes.get("gahyun:macbook")
+    expect(node).toBeDefined()
     expect(node.activeIssues).toHaveLength(0)
   })
 
@@ -181,7 +187,8 @@ describe("replayLedger", () => {
       makeEvent({ seq: 3, type: "node.reconnect", payload: { lastSeq: 2 } }),
     ]
     const state = replayLedger(events)
-    const node = state.nodes.get("gahyun:macbook")!
+    const node = state.nodes.get("gahyun:macbook")
+    expect(node).toBeDefined()
     expect(node.online).toBe(true)
   })
 
@@ -221,7 +228,8 @@ describe("replayLedger", () => {
       }),
     ]
     const state = replayLedger(events)
-    const node = state.nodes.get("gahyun:macbook")!
+    const node = state.nodes.get("gahyun:macbook")
+    expect(node).toBeDefined()
     expect(node.activeIssues).toHaveLength(0)
   })
 })
