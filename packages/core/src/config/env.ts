@@ -3,7 +3,7 @@
  * Fails fast with actionable error messages.
  */
 
-import { z } from "zod/v4"
+import { z } from "zod"
 import { detectHardware } from "./hardware"
 
 const routingRuleSchema = z.object({

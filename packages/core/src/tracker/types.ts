@@ -2,7 +2,7 @@
  * Tracker types — Linear webhook and API response types.
  */
 
-import { z } from "zod/v4"
+import { z } from "zod"
 import type { Issue } from "../domain/models"
 
 export interface WebhookEvent {

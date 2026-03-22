@@ -2,7 +2,7 @@
  * Webhook Handler — Verify Linear webhook signatures and parse payloads.
  */
 
-import { z } from "zod/v4"
+import { z } from "zod"
 import type { Issue } from "../domain/models"
 import { parseScoreFromLabels } from "../domain/models"
 import { logger } from "../observability/logger"
