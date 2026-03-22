@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, mock } from "bun:test"
 import type { EnvConfig, WorkflowState } from "./setup"
-import { buildEnvContent, findWorkflowState, linearQuery } from "./setup"
+import { buildEnvContent, findWorkflowState, linearQuery, maskApiKey } from "./setup"
 
 // ── findWorkflowState ────────────────────────────────────────────────────────
 
@@ -120,6 +120,25 @@ describe("buildEnvContent", () => {
   it("handles special characters in values", () => {
     const content = buildEnvContent({ ...config, apiKey: "lin_api_a+b=c/d" })
     expect(content).toContain("LINEAR_API_KEY=lin_api_a+b=c/d")
+  })
+})
+
+// ── maskApiKey ───────────────────────────────────────────────────────────────
+
+describe("maskApiKey", () => {
+  it("masks middle of long keys", () => {
+    const masked = maskApiKey("lin_api_abcdef123456")
+    expect(masked).toBe("lin_api_****3456")
+  })
+
+  it("returns **** for short keys", () => {
+    expect(maskApiKey("short")).toBe("****")
+    expect(maskApiKey("exactly12ch")).toBe("****")
+  })
+
+  it("handles 13-char key (boundary)", () => {
+    const masked = maskApiKey("1234567890abc")
+    expect(masked).toBe("12345678****0abc")
   })
 })
 

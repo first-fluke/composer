@@ -19,9 +19,24 @@ program.name("av").description("Agent Valley — AI agent orchestrator").version
 program
   .command("setup")
   .description("Interactive setup wizard")
+  .option("--edit", "Modify specific values in existing .env")
+  .action(async (opts: { edit?: boolean }) => {
+    if (opts.edit) {
+      const { setupEdit } = await import("./setup")
+      await setupEdit()
+    } else {
+      const { setup } = await import("./setup")
+      await setup()
+    }
+  })
+
+// ── invite ───────────────────────────────────────────────────────────────────
+program
+  .command("invite")
+  .description("Copy team config to clipboard for new members")
   .action(async () => {
-    const { setup } = await import("./setup")
-    await setup()
+    const { invite } = await import("./invite")
+    await invite()
   })
 
 // ── dev ──────────────────────────────────────────────────────────────────────
