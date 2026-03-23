@@ -76,7 +76,6 @@ export function PixiCanvas({ state }: PixiCanvasProps) {
         style={{
           width: dimensions.width * scale,
           height: dimensions.height * scale,
-          imageRendering: "pixelated",
         }}
       />
     </div>
