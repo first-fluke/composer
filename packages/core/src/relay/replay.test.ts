@@ -25,16 +25,16 @@ describe("replayLedger", () => {
       makeEvent({
         seq: 1,
         type: "node.join",
-        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" },
+        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "Gahyun" },
       }),
     ]
     const state = replayLedger(events)
     expect(state.nodes.size).toBe(1)
     const node = state.nodes.get("gahyun:macbook")
     expect(node).toBeDefined()
-    expect(node!.displayName).toBe("가현")
-    expect(node!.online).toBe(true)
-    expect(node!.activeIssues).toEqual([])
+    expect(node?.displayName).toBe("Gahyun")
+    expect(node?.online).toBe(true)
+    expect(node?.activeIssues).toEqual([])
   })
 
   test("agent.start adds active issue", () => {
@@ -42,7 +42,7 @@ describe("replayLedger", () => {
       makeEvent({
         seq: 1,
         type: "node.join",
-        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" },
+        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "Gahyun" },
       }),
       makeEvent({
         seq: 2,
@@ -53,8 +53,8 @@ describe("replayLedger", () => {
     const state = replayLedger(events)
     const node = state.nodes.get("gahyun:macbook")
     expect(node).toBeDefined()
-    expect(node!.activeIssues).toHaveLength(1)
-    expect(node!.activeIssues[0]!.issueKey).toBe("FIR-12")
+    expect(node?.activeIssues).toHaveLength(1)
+    expect(node?.activeIssues[0]?.issueKey).toBe("FIR-12")
   })
 
   test("agent.done removes active issue", () => {
@@ -62,7 +62,7 @@ describe("replayLedger", () => {
       makeEvent({
         seq: 1,
         type: "node.join",
-        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" },
+        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "Gahyun" },
       }),
       makeEvent({
         seq: 2,
@@ -74,7 +74,7 @@ describe("replayLedger", () => {
     const state = replayLedger(events)
     const node = state.nodes.get("gahyun:macbook")
     expect(node).toBeDefined()
-    expect(node!.activeIssues).toHaveLength(0)
+    expect(node?.activeIssues).toHaveLength(0)
   })
 
   test("node.leave clears all active issues", () => {
@@ -82,7 +82,7 @@ describe("replayLedger", () => {
       makeEvent({
         seq: 1,
         type: "node.join",
-        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" },
+        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "Gahyun" },
       }),
       makeEvent({
         seq: 2,
@@ -99,8 +99,8 @@ describe("replayLedger", () => {
     const state = replayLedger(events)
     const node = state.nodes.get("gahyun:macbook")
     expect(node).toBeDefined()
-    expect(node!.online).toBe(false)
-    expect(node!.activeIssues).toHaveLength(0)
+    expect(node?.online).toBe(false)
+    expect(node?.activeIssues).toHaveLength(0)
   })
 
   test("duplicate agent.start is idempotent", () => {
@@ -108,7 +108,7 @@ describe("replayLedger", () => {
       makeEvent({
         seq: 1,
         type: "node.join",
-        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" },
+        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "Gahyun" },
       }),
       makeEvent({
         seq: 2,
@@ -124,7 +124,7 @@ describe("replayLedger", () => {
     const state = replayLedger(events)
     const node = state.nodes.get("gahyun:macbook")
     expect(node).toBeDefined()
-    expect(node!.activeIssues).toHaveLength(1)
+    expect(node?.activeIssues).toHaveLength(1)
   })
 
   test("agent.done without prior start is harmless", () => {
@@ -132,14 +132,14 @@ describe("replayLedger", () => {
       makeEvent({
         seq: 1,
         type: "node.join",
-        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" },
+        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "Gahyun" },
       }),
       makeEvent({ seq: 2, type: "agent.done", payload: { issueKey: "FIR-99", issueId: "id-99", durationMs: 1000 } }),
     ]
     const state = replayLedger(events)
     const node = state.nodes.get("gahyun:macbook")
     expect(node).toBeDefined()
-    expect(node!.activeIssues).toHaveLength(0)
+    expect(node?.activeIssues).toHaveLength(0)
   })
 
   test("multiple nodes", () => {
@@ -148,13 +148,13 @@ describe("replayLedger", () => {
         seq: 1,
         nodeId: "gahyun:macbook",
         type: "node.join",
-        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" },
+        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "Gahyun" },
       }),
       makeEvent({
         seq: 2,
         nodeId: "eungwang:desktop",
         type: "node.join",
-        payload: { defaultAgentType: "gemini", maxParallel: 2, displayName: "은광" },
+        payload: { defaultAgentType: "gemini", maxParallel: 2, displayName: "Eungwang" },
       }),
       makeEvent({
         seq: 3,
@@ -181,7 +181,7 @@ describe("replayLedger", () => {
       makeEvent({
         seq: 1,
         type: "node.join",
-        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" },
+        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "Gahyun" },
       }),
       makeEvent({ seq: 2, type: "node.leave", payload: { reason: "timeout" } }),
       makeEvent({ seq: 3, type: "node.reconnect", payload: { lastSeq: 2 } }),
@@ -189,7 +189,7 @@ describe("replayLedger", () => {
     const state = replayLedger(events)
     const node = state.nodes.get("gahyun:macbook")
     expect(node).toBeDefined()
-    expect(node!.online).toBe(true)
+    expect(node?.online).toBe(true)
   })
 
   test("tracks lastSeq correctly with gaps", () => {
@@ -197,7 +197,7 @@ describe("replayLedger", () => {
       makeEvent({
         seq: 10,
         type: "node.join",
-        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" },
+        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "Gahyun" },
       }),
       makeEvent({ seq: 42, type: "agent.start", payload: { agentType: "claude", issueKey: "FIR-1", issueId: "id-1" } }),
     ]
@@ -210,7 +210,7 @@ describe("replayLedger", () => {
       makeEvent({
         seq: 1,
         type: "node.join",
-        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "가현" },
+        payload: { defaultAgentType: "claude", maxParallel: 3, displayName: "Gahyun" },
       }),
       makeEvent({
         seq: 2,
@@ -230,6 +230,6 @@ describe("replayLedger", () => {
     const state = replayLedger(events)
     const node = state.nodes.get("gahyun:macbook")
     expect(node).toBeDefined()
-    expect(node!.activeIssues).toHaveLength(0)
+    expect(node?.activeIssues).toHaveLength(0)
   })
 })

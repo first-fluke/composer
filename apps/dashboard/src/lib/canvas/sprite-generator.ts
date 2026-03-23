@@ -538,4 +538,161 @@ export function getPuppyTexture(frame: number, isWalking: boolean): Texture {
   return texture
 }
 
-export { SPRITE_SIZE, PUPPY_SIZE }
+// ── Poop sprite ──
+
+const POOP_SIZE = 16
+
+function createPoopCanvas(): OffscreenCanvas {
+  return new OffscreenCanvas(POOP_SIZE, POOP_SIZE)
+}
+
+function drawPoop(ctx: OffscreenCanvasRenderingContext2D, frame: number) {
+  // Pile
+  ctx.fillStyle = "#6B4226"
+  ctx.fillRect(4, 10, 8, 4)
+  ctx.fillRect(5, 8, 6, 2)
+  ctx.fillRect(6, 6, 4, 2)
+
+  // Highlight
+  ctx.fillStyle = "#8B5E3C"
+  ctx.fillRect(6, 10, 2, 2)
+  ctx.fillRect(7, 7, 2, 1)
+
+  // Stink lines (animated)
+  ctx.fillStyle = "#88AA66"
+  if (frame % 3 === 0) {
+    ctx.fillRect(3, 3, 1, 2)
+    ctx.fillRect(8, 2, 1, 2)
+    ctx.fillRect(12, 4, 1, 2)
+  } else if (frame % 3 === 1) {
+    ctx.fillRect(3, 2, 1, 2)
+    ctx.fillRect(8, 1, 1, 2)
+    ctx.fillRect(12, 3, 1, 2)
+  } else {
+    ctx.fillRect(3, 4, 1, 2)
+    ctx.fillRect(8, 3, 1, 2)
+    ctx.fillRect(12, 5, 1, 2)
+  }
+}
+
+const poopTextureCache = new Map<string, Texture>()
+
+export function getPoopTexture(frame: number): Texture {
+  const key = `poop-${frame}`
+  let texture = poopTextureCache.get(key)
+  if (!texture) {
+    const canvas = createPoopCanvas()
+    const ctx = canvas.getContext("2d")!
+    ctx.clearRect(0, 0, POOP_SIZE, POOP_SIZE)
+    drawPoop(ctx, frame)
+    texture = Texture.from(canvas)
+    poopTextureCache.set(key, texture)
+  }
+  return texture
+}
+
+// ── Cockatoo sprite ──
+
+const COCKATOO_SIZE = 18
+
+function createCockatooCanvas(): OffscreenCanvas {
+  return new OffscreenCanvas(COCKATOO_SIZE, COCKATOO_SIZE)
+}
+
+function drawCockatooPerched(ctx: OffscreenCanvasRenderingContext2D, frame: number) {
+  // Crest — yellow, animated bob
+  const crestY = frame % 2 === 0 ? 0 : 1
+  ctx.fillStyle = "#FFD700"
+  ctx.fillRect(8, crestY, 2, 3)
+  ctx.fillRect(7, crestY + 1, 1, 2)
+  ctx.fillRect(10, crestY, 1, 2)
+
+  // Head — white
+  ctx.fillStyle = "#F5F5F0"
+  ctx.fillRect(6, 3, 6, 5)
+
+  // Eye
+  ctx.fillStyle = "#222"
+  ctx.fillRect(10, 5, 1, 1)
+
+  // Beak — orange
+  ctx.fillStyle = "#333"
+  ctx.fillRect(12, 5, 2, 2)
+
+  // Body — white/cream
+  ctx.fillStyle = "#F0EDE0"
+  ctx.fillRect(5, 8, 8, 6)
+
+  // Wing
+  ctx.fillStyle = "#E8E4D8"
+  ctx.fillRect(4, 9, 3, 4)
+
+  // Tail
+  ctx.fillStyle = "#E8E4D8"
+  ctx.fillRect(5, 14, 3, 2)
+
+  // Feet — grey, gripping
+  ctx.fillStyle = "#888"
+  ctx.fillRect(7, 14, 2, 2)
+  ctx.fillRect(10, 14, 2, 2)
+}
+
+function drawCockatooFlying(ctx: OffscreenCanvasRenderingContext2D, frame: number) {
+  // Body — white
+  ctx.fillStyle = "#F0EDE0"
+  ctx.fillRect(6, 7, 6, 5)
+
+  // Head
+  ctx.fillStyle = "#F5F5F0"
+  ctx.fillRect(10, 4, 5, 4)
+
+  // Crest
+  ctx.fillStyle = "#FFD700"
+  ctx.fillRect(12, 1, 2, 3)
+  ctx.fillRect(13, 0, 1, 2)
+
+  // Eye
+  ctx.fillStyle = "#222"
+  ctx.fillRect(13, 5, 1, 1)
+
+  // Beak
+  ctx.fillStyle = "#333"
+  ctx.fillRect(15, 6, 2, 1)
+
+  // Wings — flapping
+  const wingY = frame % 2 === 0 ? 4 : 10
+  ctx.fillStyle = "#E8E4D8"
+  ctx.fillRect(3, wingY, 3, 3)
+  ctx.fillRect(1, wingY + 1, 2, 2)
+
+  // Tail
+  ctx.fillStyle = "#E8E4D8"
+  ctx.fillRect(4, 12, 2, 2)
+
+  // Feet tucked
+  ctx.fillStyle = "#888"
+  ctx.fillRect(8, 12, 1, 1)
+  ctx.fillRect(10, 12, 1, 1)
+}
+
+const cockatooTextureCache = new Map<string, Texture>()
+
+export function getCockatooTexture(frame: number, isFlying: boolean): Texture {
+  const key = `cockatoo-${frame}-${isFlying}`
+  let texture = cockatooTextureCache.get(key)
+  if (!texture) {
+    const canvas = createCockatooCanvas()
+    const ctx = canvas.getContext("2d")!
+    ctx.clearRect(0, 0, COCKATOO_SIZE, COCKATOO_SIZE)
+    if (isFlying) {
+      drawCockatooFlying(ctx, frame)
+    } else {
+      drawCockatooPerched(ctx, frame)
+    }
+    texture = Texture.from(canvas)
+    cockatooTextureCache.set(key, texture)
+  }
+  return texture
+}
+
+export { SPRITE_SIZE, PUPPY_SIZE, POOP_SIZE, COCKATOO_SIZE }

@@ -2,6 +2,8 @@
  * Orchestrator Helpers — Pure functions extracted to keep orchestrator.ts under 500 lines.
  */
 
+import { execSync } from "node:child_process"
+import { cpus, freemem, platform, totalmem } from "node:os"
 import type { Config } from "../config/env"
 import type { DagNode, Issue, OrchestratorRuntimeState, RunAttempt } from "../domain/models"
 import type { AgentRunnerService } from "./agent-runner"
@@ -40,22 +42,50 @@ export function sortByIssueNumber(issues: Issue[]): void {
   })
 }
 
-// Cache system metrics to avoid calling process.memoryUsage()/cpuUsage() on every poll
+// Cache system metrics with TTL to avoid expensive syscalls on every SSE poll
 let cachedMetrics: {
   memoryRss: number
-  memoryHeapUsed: number
-  memoryHeapTotal: number
+  memoryTotal: number
   cpuUser: number
-  cpuSystem: number
   uptime: number
 } | null = null
 let metricsTimestamp = 0
+let prevCpuTimes: { idle: number; total: number } | null = null
 const METRICS_TTL_MS = 5000
+
+function getMemoryUsed(): number {
+  if (platform() === "darwin") {
+    try {
+      const output = execSync("vm_stat", { encoding: "utf8" })
+      const pageSizeMatch = output.match(/page size of (\d+)/)
+      const pageSize = pageSizeMatch ? Number(pageSizeMatch[1]) : 16384
+      const get = (key: string) => {
+        const m = output.match(new RegExp(`${key}:\\s+(\\d+)`))
+        return m ? Number(m[1]) : 0
+      }
+      return (get("Pages active") + get("Pages wired down") + get("Pages occupied by compressor")) * pageSize
+    } catch {
+      // fall through
+    }
+  }
+  return totalmem() - freemem()
+}
+
+function snapshotCpuTimes() {
+  let idle = 0
+  let total = 0
+  for (const core of cpus()) {
+    idle += core.times.idle
+    total += core.times.user + core.times.nice + core.times.sys + core.times.irq + core.times.idle
+  }
+  return { idle, total }
+}
 
 /** @internal test-only — resets the metrics cache */
 export function _resetMetricsCache() {
   cachedMetrics = null
   metricsTimestamp = 0
+  prevCpuTimes = snapshotCpuTimes()
 }
 
 function getSystemMetrics() {
@@ -64,14 +94,22 @@ function getSystemMetrics() {
     return { ...cachedMetrics, uptime: process.uptime() }
   }
 
-  const mem = process.memoryUsage()
-  const cpu = process.cpuUsage()
+  const cur = snapshotCpuTimes()
+
+  let cpuPct = 0
+  if (prevCpuTimes) {
+    const totalDelta = cur.total - prevCpuTimes.total
+    const idleDelta = cur.idle - prevCpuTimes.idle
+    if (totalDelta > 0) {
+      cpuPct = Math.round(((totalDelta - idleDelta) / totalDelta) * 100)
+    }
+  }
+  prevCpuTimes = cur
+
   cachedMetrics = {
-    memoryRss: mem.rss,
-    memoryHeapUsed: mem.heapUsed,
-    memoryHeapTotal: mem.heapTotal,
-    cpuUser: cpu.user,
-    cpuSystem: cpu.system,
+    memoryRss: getMemoryUsed(),
+    memoryTotal: totalmem(),
+    cpuUser: cpuPct,
     uptime: process.uptime(),
   }
   metricsTimestamp = now

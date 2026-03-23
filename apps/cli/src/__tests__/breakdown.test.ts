@@ -7,35 +7,35 @@ import { parseBreakdownOutput, renderDagPreview } from "../breakdown"
 
 describe("parseBreakdownOutput", () => {
   test("parses complete breakdown output", () => {
-    const output = `PARENT_TITLE: feat(auth): 인증 시스템 구축
+    const output = `PARENT_TITLE: feat(auth): build authentication system
 PARENT_DESCRIPTION:
 ## Goal
-사용자 인증 시스템을 구축한다.
+Build a user authentication system.
 
 SUB_ISSUES:
 ---
-TITLE: feat(auth): DB 스키마 설계
-DESCRIPTION: 사용자 테이블 및 세션 테이블 생성
+TITLE: feat(auth): design DB schema
+DESCRIPTION: Create user and session tables
 BLOCKED_BY:
 ---
-TITLE: feat(auth): JWT 미들웨어
-DESCRIPTION: JWT 토큰 검증 미들웨어 구현
+TITLE: feat(auth): JWT middleware
+DESCRIPTION: Implement JWT token verification middleware
 BLOCKED_BY: 1
 ---
 TITLE: feat(auth): Login API
-DESCRIPTION: 로그인 엔드포인트 구현
+DESCRIPTION: Implement login endpoint
 BLOCKED_BY: 1, 2
 ---`
 
     const result = parseBreakdownOutput(output)
-    expect(result.parentTitle).toBe("feat(auth): 인증 시스템 구축")
-    expect(result.parentDescription).toContain("사용자 인증 시스템을 구축한다")
+    expect(result.parentTitle).toBe("feat(auth): build authentication system")
+    expect(result.parentDescription).toContain("Build a user authentication system")
     expect(result.subIssues).toHaveLength(3)
 
-    expect(result.subIssues[0]?.title).toBe("feat(auth): DB 스키마 설계")
+    expect(result.subIssues[0]?.title).toBe("feat(auth): design DB schema")
     expect(result.subIssues[0]?.blockedByIndices).toEqual([])
 
-    expect(result.subIssues[1]?.title).toBe("feat(auth): JWT 미들웨어")
+    expect(result.subIssues[1]?.title).toBe("feat(auth): JWT middleware")
     expect(result.subIssues[1]?.blockedByIndices).toEqual([1])
 
     expect(result.subIssues[2]?.title).toBe("feat(auth): Login API")

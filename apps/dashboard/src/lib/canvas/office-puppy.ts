@@ -6,6 +6,8 @@ const WANDER_SPEED = 0.6
 const WALK_FRAME_INTERVAL = 250
 const MIN_PAUSE = 1500
 const MAX_PAUSE = 4000
+const POOP_CHANCE = 0.08
+const POOP_COOLDOWN = 15000
 
 export class OfficePuppy {
   readonly container: Container
@@ -18,6 +20,8 @@ export class OfficePuppy {
   private targetY = 0
   private isMoving = false
   private pauseRemaining: number
+  private poopCooldown = 0
+  onPoop: ((x: number, y: number) => void) | null = null
 
   constructor(
     walkableTiles: { col: number; row: number }[],
@@ -45,6 +49,8 @@ export class OfficePuppy {
   private animate(ticker: Ticker) {
     const dt = ticker.deltaMS
 
+    this.poopCooldown = Math.max(0, this.poopCooldown - dt)
+
     if (this.isMoving) {
       this.moveToward(this.targetX, this.targetY)
       if (this.isNear(this.targetX, this.targetY)) {
@@ -59,6 +65,7 @@ export class OfficePuppy {
     } else {
       this.pauseRemaining -= dt
       if (this.pauseRemaining <= 0) {
+        this.tryPoop()
         this.pickTarget()
       }
     }
@@ -106,6 +113,13 @@ export class OfficePuppy {
     this.isMoving = true
     this.frame = 0
     this.elapsed = 0
+  }
+
+  private tryPoop() {
+    if (this.poopCooldown > 0) return
+    if (Math.random() > POOP_CHANCE) return
+    this.poopCooldown = POOP_COOLDOWN
+    this.onPoop?.(this.container.x, this.container.y)
   }
 
   private updateSprite() {

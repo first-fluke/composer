@@ -1,13 +1,14 @@
-import { Application, Container, Sprite, Text, TextStyle } from "pixi.js"
+import { Application, Container, Sprite, Text, TextStyle, type Ticker } from "pixi.js"
 import {
   TILE_SIZE,
   OFFICE_ROWS,
   computeLayout,
   type OfficeLayout,
 } from "@/features/office/utils/office-layout"
-import { getFurnitureTexture } from "@/lib/canvas/sprite-generator"
+import { getFurnitureTexture, getPoopTexture } from "@/lib/canvas/sprite-generator"
 import { AgentCharacter } from "@/lib/canvas/agent-character"
 import { OfficePuppy } from "@/lib/canvas/office-puppy"
+import { OfficeCockatoo } from "@/lib/canvas/office-cockatoo"
 import { IssueBubble } from "@/lib/canvas/issue-bubble"
 import { CHARACTER_SKINS, type AgentType, type CharacterSkin, type OrchestratorState } from "@/features/office/types/agent"
 
@@ -36,6 +37,13 @@ export class OfficeScene {
   private deskLabels: Map<number, Text> = new Map()
   private outputTexts: Map<number, Text> = new Map()
   private puppy: OfficePuppy | null = null
+  private cockatoo: OfficeCockatoo | null = null
+  private poops: Map<string, Sprite> = new Map()
+  private poopFrame = 0
+  private poopElapsed = 0
+  private bathroomOccupant: number | null = null
+  private bathroomCol = 0
+  private bathroomRow = 0
   private currentAgentType: AgentType = "claude"
   private currentSlotCount = 0
   private layout: OfficeLayout | null = null
@@ -58,6 +66,7 @@ export class OfficeScene {
       height: OFFICE_ROWS * TILE_SIZE,
       backgroundColor: 0x1a1a2e,
       antialias: false,
+      roundPixels: true,
       resolution: 2,
       autoDensity: true,
     })
@@ -67,16 +76,21 @@ export class OfficeScene {
     this.app.stage.addChild(this.characterLayer)
     this.app.stage.addChild(this.uiLayer)
 
+    this.app.ticker.add(this.animatePoops, this)
     this.initialized = true
   }
 
   private clearLayers() {
     for (const [, character] of this.characters) character.destroy()
     for (const [, bubble] of this.bubbles) bubble.destroy()
+    for (const [, poop] of this.poops) poop.destroy()
     this.puppy?.destroy()
     this.puppy = null
+    this.cockatoo?.destroy()
+    this.cockatoo = null
     this.characters.clear()
     this.bubbles.clear()
+    this.poops.clear()
     this.deskLabels.clear()
     this.outputTexts.clear()
     this.floorLayer.removeChildren()
@@ -182,9 +196,10 @@ export class OfficeScene {
       const label = new Text({
         text: desk.label,
         style: new TextStyle({
-          fontFamily: "monospace",
-          fontSize: 8,
-          fill: 0x888888,
+          fontFamily: "'Courier New', monospace",
+          fontSize: 10,
+          fill: 0xaaaaaa,
+          fontWeight: "bold",
         }),
       })
       label.x = desk.col * TILE_SIZE + 2
@@ -195,11 +210,11 @@ export class OfficeScene {
       const outputText = new Text({
         text: "",
         style: new TextStyle({
-          fontFamily: "monospace",
-          fontSize: 5,
+          fontFamily: "'Courier New', monospace",
+          fontSize: 8,
           fill: 0x44ff44,
           wordWrap: true,
-          wordWrapWidth: 36,
+          wordWrapWidth: 48,
         }),
       })
       outputText.x = desk.col * TILE_SIZE + 2
@@ -211,8 +226,13 @@ export class OfficeScene {
   }
 
   private createCharacters() {
-    const { desks, walkableTiles, interestPoints } = this.layout!
+    const { desks, walkableTiles, interestPoints, cols } = this.layout!
     const skins = pickRandomSkins(desks.length)
+
+    // Bathroom semaphore — locate the bathroom interest point
+    this.bathroomCol = cols - 2
+    this.bathroomRow = OFFICE_ROWS - 1
+    this.bathroomOccupant = null
 
     for (let i = 0; i < desks.length; i++) {
       const desk = desks[i]
@@ -224,6 +244,18 @@ export class OfficeScene {
         interestPoints,
         this.app.ticker,
       )
+      // Bathroom semaphore: only 1 agent at a time
+      const agentIndex = i
+      character.isInterestPointAvailable = (col, row) => {
+        if (col === this.bathroomCol && row === this.bathroomRow) {
+          if (this.bathroomOccupant === null) {
+            this.bathroomOccupant = agentIndex
+            return true
+          }
+          return this.bathroomOccupant === agentIndex
+        }
+        return true
+      }
       character.setPosition(desk.col * TILE_SIZE, (desk.row + 1) * TILE_SIZE)
       this.characterLayer.addChild(character.container)
       this.characters.set(i, character)
@@ -234,9 +266,91 @@ export class OfficeScene {
       this.bubbles.set(i, bubble)
     }
 
-    // Office puppy
+    // Office puppy with poop callback
     this.puppy = new OfficePuppy(walkableTiles, this.app.ticker)
+    this.puppy.onPoop = (x, y) => this.spawnPoop(x, y)
     this.characterLayer.addChild(this.puppy.container)
+
+    // Cockatoo — perches on plant furniture
+    const plantPositions = this.layout!.furniture
+      .filter((f) => f.type === "plant")
+      .map((f) => ({ col: f.col, row: f.row }))
+    if (plantPositions.length >= 2) {
+      this.cockatoo = new OfficeCockatoo(plantPositions, this.app.ticker)
+      this.characterLayer.addChild(this.cockatoo.container)
+    }
+  }
+
+  private poopKey(x: number, y: number): string {
+    return `${Math.round(x)},${Math.round(y)}`
+  }
+
+  private spawnPoop(x: number, y: number) {
+    const key = this.poopKey(x, y)
+    if (this.poops.has(key)) return
+
+    const sprite = new Sprite(getPoopTexture(0))
+    sprite.x = x
+    sprite.y = y
+    this.furnitureLayer.addChild(sprite)
+    this.poops.set(key, sprite)
+
+    this.assignCleanupToIdleAgent(x, y)
+  }
+
+  private assignCleanupToIdleAgent(x: number, y: number) {
+    let closest: AgentCharacter | null = null
+    let closestDist = Number.POSITIVE_INFINITY
+
+    for (const [, character] of this.characters) {
+      if (character.currentStatus !== "idle" || character.isBusyCleaning) continue
+      const dx = character.container.x - x
+      const dy = character.container.y - y
+      const dist = dx * dx + dy * dy
+      if (dist < closestDist) {
+        closestDist = dist
+        closest = character
+      }
+    }
+
+    if (closest) {
+      closest.onCleanupDone = (cx, cy) => {
+        const k = this.poopKey(cx, cy)
+        const poopSprite = this.poops.get(k)
+        if (poopSprite) {
+          poopSprite.destroy()
+          this.poops.delete(k)
+        }
+      }
+      closest.assignCleanup(x, y)
+    }
+  }
+
+  private updateBathroomSemaphore() {
+    if (this.bathroomOccupant === null) return
+    const character = this.characters.get(this.bathroomOccupant)
+    if (!character) { this.bathroomOccupant = null; return }
+    const bx = this.bathroomCol * TILE_SIZE
+    const by = this.bathroomRow * TILE_SIZE
+    const dx = Math.abs(character.container.x - bx)
+    const dy = Math.abs(character.container.y - by)
+    if (dx > TILE_SIZE * 2 || dy > TILE_SIZE * 2) {
+      this.bathroomOccupant = null
+    }
+  }
+
+  private animatePoops(ticker: Ticker) {
+    this.updateBathroomSemaphore()
+    if (this.poops.size === 0) return
+    this.poopElapsed += ticker.deltaMS
+    if (this.poopElapsed >= 400) {
+      this.poopElapsed = 0
+      this.poopFrame = (this.poopFrame + 1) % 3
+      const texture = getPoopTexture(this.poopFrame)
+      for (const [, sprite] of this.poops) {
+        sprite.texture = texture
+      }
+    }
   }
 
   updateState(state: OrchestratorState) {
@@ -289,6 +403,14 @@ export class OfficeScene {
       const outputText = this.outputTexts.get(i)
       if (outputText) outputText.visible = false
     }
+
+    // Retry assigning unattended poops to idle agents
+    if (this.poops.size > 0) {
+      for (const [key] of this.poops) {
+        const [xStr, yStr] = key.split(",")
+        this.assignCleanupToIdleAgent(Number(xStr), Number(yStr))
+      }
+    }
   }
 
   get dimensions() {
@@ -298,6 +420,9 @@ export class OfficeScene {
   }
 
   destroy() {
+    if (this.initialized) {
+      this.app.ticker.remove(this.animatePoops, this)
+    }
     this.clearLayers()
     if (this.initialized) {
       this.app.destroy(true)

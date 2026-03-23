@@ -6,11 +6,12 @@ import type { ConnectionStatus } from "../types/team"
 interface TeamHudProps {
   teamState: TeamState | null
   connectionStatus: ConnectionStatus
+  retryQueueSize?: number
+  lastEventAt?: string | null
 }
 
-export function TeamHud({ teamState, connectionStatus }: TeamHudProps) {
+export function TeamHud({ teamState, connectionStatus, retryQueueSize, lastEventAt }: TeamHudProps) {
   const nodes = teamState?.nodes ?? []
-  const onlineCount = nodes.filter((n) => n.online).length
   const totalSlots = nodes.reduce((sum, n) => sum + n.maxParallel, 0)
   const activeAgents = nodes.reduce((sum, n) => sum + n.activeIssues.length, 0)
   const idleSlots = totalSlots - activeAgents
@@ -34,12 +35,7 @@ export function TeamHud({ teamState, connectionStatus }: TeamHudProps) {
         </div>
 
         <div className="flex justify-between">
-          <span className="text-gray-400">Online</span>
-          <span className="text-white">{onlineCount} / {nodes.length}</span>
-        </div>
-
-        <div className="flex justify-between">
-          <span className="text-gray-400">Active Agents</span>
+          <span className="text-gray-400">Agents</span>
           <span className="text-white">{activeAgents} / {totalSlots}</span>
         </div>
 
@@ -49,6 +45,22 @@ export function TeamHud({ teamState, connectionStatus }: TeamHudProps) {
             {idleSlots}
           </span>
         </div>
+
+        {(retryQueueSize ?? 0) > 0 && (
+          <div className="flex justify-between">
+            <span className="text-gray-400">Retry Queue</span>
+            <span className="text-yellow-400">{retryQueueSize}</span>
+          </div>
+        )}
+
+        {lastEventAt && (
+          <div className="flex justify-between">
+            <span className="text-gray-400">Last Event</span>
+            <span className="text-gray-300 text-[10px]">
+              {new Date(lastEventAt).toLocaleTimeString()}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   )

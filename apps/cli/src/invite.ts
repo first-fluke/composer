@@ -155,7 +155,7 @@ export async function invite(): Promise<void> {
 
   const data = extractInviteFromEnv()
   if (!data) {
-    p.log.error("먼저 `bun av setup`으로 설정을 완료하세요.")
+    p.log.error("Setup required. Run `bun av setup` first.")
     process.exit(1)
   }
 
@@ -163,13 +163,13 @@ export async function invite(): Promise<void> {
   const copied = await writeClipboard(encoded)
 
   if (copied) {
-    p.log.success("초대 코드가 클립보드에 복사되었습니다.")
+    p.log.success("Invite code copied to clipboard.")
   } else {
-    p.log.warning("클립보드 복사에 실패했습니다. 아래 코드를 직접 공유하세요:")
+    p.log.warning("Failed to copy to clipboard. Share the code below manually:")
     console.log()
     console.log(encoded)
     console.log()
   }
 
-  p.outro(pc.green("새 멤버에게 전달하세요. `bun av setup` 실행 시 자동 감지됩니다."))
+  p.outro(pc.green("Share this with new members. It will be auto-detected when they run `bun av setup`."))
 }

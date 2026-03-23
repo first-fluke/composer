@@ -23,9 +23,10 @@ export class IssueBubble {
     this.label = new Text({
       text: "",
       style: new TextStyle({
-        fontFamily: "monospace",
-        fontSize: 7,
+        fontFamily: "'Courier New', monospace",
+        fontSize: 9,
         fill: 0xffffff,
+        fontWeight: "bold",
       }),
     })
     this.label.x = 4
@@ -38,13 +39,13 @@ export class IssueBubble {
     const color = STATUS_COLORS[status]
 
     this.bg.clear()
-    this.bg.roundRect(0, 0, this.label.width + 8, 14, 3)
+    this.bg.roundRect(0, 0, this.label.width + 8, 16, 3)
     this.bg.fill({ color, alpha: 0.9 })
 
     // Speech bubble pointer
-    this.bg.moveTo(8, 14)
-    this.bg.lineTo(12, 18)
-    this.bg.lineTo(16, 14)
+    this.bg.moveTo(8, 16)
+    this.bg.lineTo(12, 20)
+    this.bg.lineTo(16, 16)
     this.bg.fill({ color, alpha: 0.9 })
 
     this.container.visible = true

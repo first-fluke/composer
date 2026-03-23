@@ -1,7 +1,7 @@
 /**
  * System metrics caching regression tests.
  *
- * Ensures buildOrchestratorStatus caches process.memoryUsage()/cpuUsage()
+ * Ensures buildOrchestratorStatus caches os.cpus()/freemem()/totalmem()
  * calls with a TTL, preventing expensive synchronous syscalls on every
  * SSE poll interval.
  */
@@ -11,9 +11,6 @@ import type { OrchestratorRuntimeState } from "../domain/models"
 import type { AgentRunnerService } from "../orchestrator/agent-runner"
 import { _resetMetricsCache, buildOrchestratorStatus } from "../orchestrator/helpers"
 import type { RetryQueue } from "../orchestrator/retry-queue"
-
-const memoryUsageSpy = vi.spyOn(process, "memoryUsage")
-const cpuUsageSpy = vi.spyOn(process, "cpuUsage")
 
 function makeState(): OrchestratorRuntimeState {
   return {
@@ -43,11 +40,15 @@ function makeConfig(): Config {
   } as Config
 }
 
+function callBuild() {
+  return buildOrchestratorStatus(makeState(), new Map(), makeAgentRunner(), makeRetryQueue(), makeConfig()) as {
+    systemMetrics: Record<string, number>
+  }
+}
+
 describe("buildOrchestratorStatus — metrics caching", () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    memoryUsageSpy.mockClear()
-    cpuUsageSpy.mockClear()
     _resetMetricsCache()
   })
 
@@ -55,64 +56,49 @@ describe("buildOrchestratorStatus — metrics caching", () => {
     vi.useRealTimers()
   })
 
-  test("calls process.memoryUsage() on first invocation", () => {
-    buildOrchestratorStatus(makeState(), new Map(), makeAgentRunner(), makeRetryQueue(), makeConfig())
-
-    expect(memoryUsageSpy).toHaveBeenCalledTimes(1)
-    expect(cpuUsageSpy).toHaveBeenCalledTimes(1)
-  })
-
-  test("returns cached metrics within TTL window", () => {
-    const args = [makeState(), new Map(), makeAgentRunner(), makeRetryQueue(), makeConfig()] as const
-
-    buildOrchestratorStatus(...args)
-    buildOrchestratorStatus(...args)
-    buildOrchestratorStatus(...args)
-
-    // Only 1 real call despite 3 invocations
-    expect(memoryUsageSpy).toHaveBeenCalledTimes(1)
-    expect(cpuUsageSpy).toHaveBeenCalledTimes(1)
-  })
-
-  test("refreshes metrics after TTL expires", () => {
-    const args = [makeState(), new Map(), makeAgentRunner(), makeRetryQueue(), makeConfig()] as const
-
-    buildOrchestratorStatus(...args)
-    expect(memoryUsageSpy).toHaveBeenCalledTimes(1)
-
-    // Advance past 5s TTL
-    vi.advanceTimersByTime(5_001)
-
-    buildOrchestratorStatus(...args)
-    expect(memoryUsageSpy).toHaveBeenCalledTimes(2)
-    expect(cpuUsageSpy).toHaveBeenCalledTimes(2)
-  })
-
-  test("returns systemMetrics in the status payload", () => {
-    const result = buildOrchestratorStatus(
-      makeState(),
-      new Map(),
-      makeAgentRunner(),
-      makeRetryQueue(),
-      makeConfig(),
-    ) as { systemMetrics: Record<string, number> }
+  test("returns systemMetrics with expected fields", () => {
+    const result = callBuild()
 
     expect(result.systemMetrics).toBeDefined()
     expect(typeof result.systemMetrics.memoryRss).toBe("number")
-    expect(typeof result.systemMetrics.memoryHeapUsed).toBe("number")
+    expect(typeof result.systemMetrics.memoryTotal).toBe("number")
     expect(typeof result.systemMetrics.cpuUser).toBe("number")
     expect(typeof result.systemMetrics.uptime).toBe("number")
   })
 
-  test("rapid polling (simulating multiple SSE connections) stays cached", () => {
-    const args = [makeState(), new Map(), makeAgentRunner(), makeRetryQueue(), makeConfig()] as const
+  test("returns cached metrics within TTL window", () => {
+    const a = callBuild()
+    const b = callBuild()
+    const c = callBuild()
 
-    // Simulate 4 SSE connections polling every 2s over 4s (total = 8 calls)
+    // Same cached object (except uptime) within TTL
+    expect(a.systemMetrics.memoryRss).toBe(b.systemMetrics.memoryRss)
+    expect(b.systemMetrics.memoryRss).toBe(c.systemMetrics.memoryRss)
+    expect(a.systemMetrics.cpuUser).toBe(c.systemMetrics.cpuUser)
+  })
+
+  test("refreshes metrics after TTL expires", () => {
+    const before = callBuild()
+
+    // Advance past 5s TTL
+    vi.advanceTimersByTime(5_001)
+
+    const after = callBuild()
+
+    // uptime should differ since we advanced time
+    expect(after.systemMetrics.uptime).toBeGreaterThan(before.systemMetrics.uptime)
+  })
+
+  test("rapid polling stays cached", () => {
+    const results: number[] = []
+
+    // Simulate 8 rapid polls within TTL
     for (let i = 0; i < 8; i++) {
-      buildOrchestratorStatus(...args)
+      const r = callBuild()
+      results.push(r.systemMetrics.memoryRss)
     }
 
-    // All within TTL — only 1 real syscall
-    expect(memoryUsageSpy).toHaveBeenCalledTimes(1)
+    // All return same cached value
+    expect(new Set(results).size).toBe(1)
   })
 })

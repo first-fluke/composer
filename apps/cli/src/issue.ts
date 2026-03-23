@@ -106,8 +106,8 @@ export function parseExpandedIssue(output: string): IssueInput {
 }
 
 async function expandWithClaude(rawInput: string): Promise<IssueInput> {
-  const cmd = ["claude", "--print", "--no-session-persistence", "-p", `${EXPAND_PROMPT}\n\nInput: ${rawInput}`]
-  const proc = spawn(cmd[0]!, cmd.slice(1), { stdio: ["pipe", "pipe", "pipe"] })
+  const args = ["--print", "--no-session-persistence", "-p", `${EXPAND_PROMPT}\n\nInput: ${rawInput}`]
+  const proc = spawn("claude", args, { stdio: ["pipe", "pipe", "pipe"] })
 
   const { output, exitCode } = await new Promise<{ output: string; exitCode: number }>((resolve, reject) => {
     const chunks: Buffer[] = []
@@ -134,16 +134,16 @@ export async function createIssue(
   const todoStateId = process.env.LINEAR_WORKFLOW_STATE_TODO
 
   if (!apiKey || !teamUuid || !todoStateId) {
-    console.log(pc.red("설정이 필요합니다. `bun av setup` 을 먼저 실행하세요."))
+    console.log(pc.red("Setup required. Run `bun av setup` first."))
     process.exit(1)
   }
 
   // --breakdown mode: delegate to breakdown handler
   if (options?.breakdown) {
     if (!input) {
-      const t = await p.text({ message: "분해할 기능을 설명해주세요", placeholder: "인증 시스템 구축" })
+      const t = await p.text({ message: "Describe the feature to break down", placeholder: "Build auth system" })
       if (p.isCancel(t)) {
-        p.cancel("취소되었습니다")
+        p.cancel("Cancelled")
         process.exit(0)
       }
       input = t
@@ -162,14 +162,14 @@ export async function createIssue(
     p.intro(pc.bgMagenta(pc.black(" New Issue ")))
 
     const t = await p.text({
-      message: "무엇을 만들까요?",
-      placeholder: "로그인 기능 추가",
+      message: "What do you want to build?",
+      placeholder: "Add login feature",
       validate: (v) => {
-        if (!v) return "필수 입력입니다"
+        if (!v) return "Required"
       },
     })
     if (p.isCancel(t)) {
-      p.cancel("취소되었습니다")
+      p.cancel("Cancelled")
       process.exit(0)
     }
     input = t
@@ -183,17 +183,17 @@ export async function createIssue(
     description = parsed.description
   } else {
     // Expand with Claude
-    s.start("이슈 확장 중...")
+    s.start("Expanding issue...")
 
     try {
       const expanded = await expandWithClaude(input)
       title = expanded.title
       description = expanded.description
       score = expanded.score
-      s.stop("이슈 확장 완료")
+      s.stop("Issue expansion complete")
     } catch {
       // Fallback: use raw input as-is
-      s.stop(pc.yellow("Claude CLI 사용 불가 — 원본 입력 사용"))
+      s.stop(pc.yellow("Claude CLI unavailable — using raw input"))
       const parsed = parseIssueInput(input)
       title = parsed.title || input
       description = parsed.description
@@ -203,41 +203,46 @@ export async function createIssue(
   // Resolve --parent identifier to UUID
   let parentId: string | null = null
   if (options?.parent) {
-    s.start(`부모 이슈 확인 중 (${options.parent})...`)
+    s.start(`Resolving parent issue (${options.parent})...`)
     try {
       const { fetchIssueByIdentifier } = await import("@agent-valley/core/tracker/linear-client")
       const found = await fetchIssueByIdentifier(apiKey, teamUuid, options.parent)
-      if (!found) throw new Error(`이슈를 찾을 수 없습니다: ${options.parent}`)
+      if (!found) throw new Error(`Issue not found: ${options.parent}`)
       parentId = found.id
-      s.stop(pc.green(`부모 이슈: ${found.identifier}`))
+      s.stop(pc.green(`Parent issue: ${found.identifier}`))
     } catch (e) {
-      s.stop(pc.red("부모 이슈 확인 실패"))
+      s.stop(pc.red("Failed to resolve parent issue"))
       console.log(pc.red((e as Error).message))
       process.exit(1)
     }
   }
 
   // Show preview and confirm
-  const scoreDisplay = score !== null ? `\n${pc.cyan(`난이도: score:${score}`)}` : ""
-  const parentDisplay = parentId ? `\n${pc.magenta(`부모: ${options?.parent}`)}` : ""
+  const scoreDisplay = score !== null ? `\n${pc.cyan(`Complexity: score:${score}`)}` : ""
+  const parentDisplay = parentId ? `\n${pc.magenta(`Parent: ${options?.parent}`)}` : ""
   const blockerDisplay = options?.blockedBy ? `\n${pc.yellow(`blocked by: ${options.blockedBy}`)}` : ""
   p.note(
-    [`${pc.bold(title)}`, "", description || pc.dim("(설명 없음)"), scoreDisplay, parentDisplay, blockerDisplay].join(
-      "\n",
-    ),
-    "이슈 미리보기",
+    [
+      `${pc.bold(title)}`,
+      "",
+      description || pc.dim("(no description)"),
+      scoreDisplay,
+      parentDisplay,
+      blockerDisplay,
+    ].join("\n"),
+    "Issue Preview",
   )
 
   if (!autoConfirm) {
-    const confirmed = await p.confirm({ message: "이대로 생성할까요?" })
+    const confirmed = await p.confirm({ message: "Create this issue?" })
     if (p.isCancel(confirmed) || !confirmed) {
-      p.cancel("취소되었습니다")
+      p.cancel("Cancelled")
       process.exit(0)
     }
   }
 
   // Create in Linear
-  s.start("Linear 이슈 생성 중...")
+  s.start("Creating Linear issue...")
 
   try {
     const res = await fetch("https://api.linear.app/graphql", {
@@ -288,16 +293,16 @@ export async function createIssue(
       }
     }
 
-    s.stop(pc.green(`이슈 생성 완료: ${issue.identifier}`))
+    s.stop(pc.green(`Issue created: ${issue.identifier}`))
 
     const infoLines = [`${pc.bold(issue.identifier)}: ${issue.title}`, "", pc.dim(issue.url), ""]
     if (parentId) infoLines.push(`${pc.magenta("Sub-issue of")} ${options?.parent}`)
     if (options?.blockedBy) infoLines.push(`${pc.yellow("Blocked by")} ${options.blockedBy}`)
-    infoLines.push(`상태: ${pc.green("Todo")} → 서버가 실행 중이면 자동으로 에이전트가 시작됩니다`)
+    infoLines.push(`Status: ${pc.green("Todo")} — agent will start automatically if the server is running`)
 
     p.note(infoLines.join("\n"), "Created")
   } catch (e) {
-    s.stop(pc.red("이슈 생성 실패"))
+    s.stop(pc.red("Failed to create issue"))
     console.log(pc.red((e as Error).message))
     process.exit(1)
   }

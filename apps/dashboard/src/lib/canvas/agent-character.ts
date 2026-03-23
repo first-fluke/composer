@@ -32,6 +32,15 @@ export class AgentCharacter {
   private pauseRemaining = 0
   private atHome = true
 
+  // Cleanup state
+  private cleanupTarget: { x: number; y: number } | null = null
+  private isCleaningUp = false
+  private cleanupTimer = 0
+  onCleanupDone: ((x: number, y: number) => void) | null = null
+
+  // Interest point filter (for semaphore-like bathroom access)
+  isInterestPointAvailable: ((col: number, row: number) => boolean) | null = null
+
   constructor(
     agentType: AgentType,
     skin: CharacterSkin,
@@ -98,6 +107,34 @@ export class AgentCharacter {
   }
 
   private updateIdle(dt: number) {
+    // Cleanup takes priority
+    if (this.isCleaningUp) {
+      this.cleanupTimer -= dt
+      if (this.cleanupTimer <= 0) {
+        this.isCleaningUp = false
+        const target = this.cleanupTarget!
+        this.cleanupTarget = null
+        this.pauseRemaining = 500
+        this.onCleanupDone?.(target.x, target.y)
+      }
+      return
+    }
+
+    if (this.cleanupTarget) {
+      this.moveToward(this.cleanupTarget.x, this.cleanupTarget.y, RETURN_SPEED)
+      if (this.isNear(this.cleanupTarget.x, this.cleanupTarget.y)) {
+        this.container.x = this.cleanupTarget.x
+        this.container.y = this.cleanupTarget.y
+        this.isCleaningUp = true
+        this.cleanupTimer = 1200
+        this.isMoving = false
+        this.frame = 0
+        this.elapsed = 0
+        this.updateSprite()
+      }
+      return
+    }
+
     if (this.isMoving) {
       this.moveToward(this.targetX, this.targetY, WANDER_SPEED)
       if (this.isNear(this.targetX, this.targetY)) {
@@ -147,7 +184,14 @@ export class AgentCharacter {
     let tile: { col: number; row: number }
 
     if (this.interestPoints.length > 0 && Math.random() < INTEREST_POINT_CHANCE) {
-      tile = this.interestPoints[Math.floor(Math.random() * this.interestPoints.length)]
+      const available = this.isInterestPointAvailable
+        ? this.interestPoints.filter((p) => this.isInterestPointAvailable!(p.col, p.row))
+        : this.interestPoints
+      if (available.length > 0) {
+        tile = available[Math.floor(Math.random() * available.length)]
+      } else {
+        tile = this.walkableTiles[Math.floor(Math.random() * this.walkableTiles.length)]
+      }
     } else {
       tile = this.walkableTiles[Math.floor(Math.random() * this.walkableTiles.length)]
     }
@@ -194,6 +238,22 @@ export class AgentCharacter {
       this.agentType = agentType
       this.updateSprite()
     }
+  }
+
+  assignCleanup(x: number, y: number) {
+    this.cleanupTarget = { x, y }
+    this.isMoving = true
+    this.atHome = false
+    this.frame = 0
+    this.elapsed = 0
+  }
+
+  get isBusyCleaning(): boolean {
+    return this.cleanupTarget !== null || this.isCleaningUp
+  }
+
+  get currentStatus(): WorkspaceStatus {
+    return this.status
   }
 
   setPosition(x: number, y: number) {

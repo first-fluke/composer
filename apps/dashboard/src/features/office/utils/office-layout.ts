@@ -25,7 +25,6 @@ export interface OfficeLayout {
 
 export function computeLayout(slotCount: number): OfficeLayout {
   const count = Math.max(1, slotCount)
-  // Extra margin for gym (left) and bathroom (right)
   const deskArea = Math.max(16, (count - 1) * 4 + 6)
   const cols = deskArea + 6
 
@@ -43,11 +42,16 @@ export function computeLayout(slotCount: number): OfficeLayout {
   furniture.push({ col: gymCol, row: gymRow, type: "gym" })
   interestPoints.push({ col: gymCol, row: gymRow - 1 })
 
-  // Bathroom — bottom-right
-  const bathroomCol = cols - 3
-  const bathroomRow = 9
-  furniture.push({ col: bathroomCol, row: bathroomRow, type: "bathroom" })
-  interestPoints.push({ col: bathroomCol, row: bathroomRow - 1 })
+  // ── Bathroom bump — sticks out BELOW bottom-right (2 rows) ──
+  const bathCol = cols - 2
+  furniture.push({ col: bathCol, row: OFFICE_ROWS - 1, type: "floor" })    // door (covers bottom wall)
+  furniture.push({ col: bathCol - 1, row: OFFICE_ROWS, type: "wall" })     // left wall
+  furniture.push({ col: bathCol, row: OFFICE_ROWS, type: "bathroom" })     // fixture
+  furniture.push({ col: bathCol + 1, row: OFFICE_ROWS, type: "wall" })     // right wall
+  furniture.push({ col: bathCol - 1, row: OFFICE_ROWS + 1, type: "wall" }) // bottom-left
+  furniture.push({ col: bathCol, row: OFFICE_ROWS + 1, type: "wall" })     // bottom
+  furniture.push({ col: bathCol + 1, row: OFFICE_ROWS + 1, type: "wall" }) // bottom-right
+  interestPoints.push({ col: bathCol, row: OFFICE_ROWS - 1 })              // inside bathroom (door tile)
 
   // Coffee machine — top-left
   const coffeeCol = 2
@@ -65,9 +69,9 @@ export function computeLayout(slotCount: number): OfficeLayout {
     })
   }
 
-  // Bottom floor plants (between gym and bathroom)
+  // Bottom floor plants (between gym and right wall)
   const plantStart = gymCol + 3
-  const plantEnd = bathroomCol - 2
+  const plantEnd = cols - 3
   const plantSpan = plantEnd - plantStart
   const plantCount = Math.max(0, Math.floor(plantSpan / 5))
   for (let i = 0; i < plantCount; i++) {
@@ -83,17 +87,21 @@ export function computeLayout(slotCount: number): OfficeLayout {
     blocked.add(`${d.col},${d.row}`)     // desk
     blocked.add(`${d.col},${d.row + 1}`) // chair
   }
+  // Un-block bathroom door tile (floor furniture covers wall visually, but agents walk here)
+  blocked.delete(`${bathCol},${OFFICE_ROWS - 1}`)
   const walkableTiles: { col: number; row: number }[] = []
   for (let row = 2; row < OFFICE_ROWS - 1; row++) {
     for (let col = 1; col < cols - 1; col++) {
       if (!blocked.has(`${col},${row}`)) walkableTiles.push({ col, row })
     }
   }
+  // Manually add bathroom door tile (outside normal row range)
+  walkableTiles.push({ col: bathCol, row: OFFICE_ROWS - 1 })
 
   return {
     cols,
     width: cols * TILE_SIZE,
-    height: OFFICE_ROWS * TILE_SIZE,
+    height: (OFFICE_ROWS + 2) * TILE_SIZE,
     desks,
     furniture,
     walkableTiles,

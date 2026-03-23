@@ -141,7 +141,7 @@ export async function executeBreakdown(input: string, opts: { yes?: boolean }): 
   const todoStateId = process.env.LINEAR_WORKFLOW_STATE_TODO
 
   if (!apiKey || !teamUuid || !todoStateId) {
-    console.log(pc.red("설정이 필요합니다. `bun av setup` 을 먼저 실행하세요."))
+    console.log(pc.red("Setup required. Run `bun av setup` first."))
     process.exit(1)
   }
 
@@ -149,35 +149,35 @@ export async function executeBreakdown(input: string, opts: { yes?: boolean }): 
   const s = p.spinner()
 
   // Step 1: Claude decomposes the issue
-  s.start("이슈 분해 중...")
+  s.start("Decomposing issue...")
   let result: BreakdownResult
   try {
     result = await expandBreakdownWithClaude(input)
-    s.stop("이슈 분해 완료")
+    s.stop("Issue decomposition complete")
   } catch (e) {
-    s.stop(pc.red("분해 실패"))
+    s.stop(pc.red("Decomposition failed"))
     console.log(pc.red((e as Error).message))
     process.exit(1)
   }
 
   if (result.subIssues.length === 0) {
-    console.log(pc.yellow("분해할 하위 이슈가 없습니다."))
+    console.log(pc.yellow("No sub-issues to create."))
     process.exit(0)
   }
 
   // Step 2: Preview
-  p.note(renderDagPreview(result), "분해 결과")
+  p.note(renderDagPreview(result), "Breakdown Result")
 
   if (!opts.yes) {
-    const confirmed = await p.confirm({ message: `${result.subIssues.length}개 하위 이슈를 생성할까요?` })
+    const confirmed = await p.confirm({ message: `Create ${result.subIssues.length} sub-issues?` })
     if (p.isCancel(confirmed) || !confirmed) {
-      p.cancel("취소되었습니다")
+      p.cancel("Cancelled")
       process.exit(0)
     }
   }
 
   // Step 3: Create parent issue
-  s.start("부모 이슈 생성 중...")
+  s.start("Creating parent issue...")
   const { createSubIssue, createIssueRelation } = await import("@agent-valley/core/tracker/linear-client")
 
   let parentIssue: { id: string; identifier: string; title: string; url: string }
@@ -203,16 +203,16 @@ export async function executeBreakdown(input: string, opts: { yes?: boolean }): 
     if (!json.data?.issueCreate?.success || !json.data.issueCreate.issue)
       throw new Error("Parent issue creation failed")
     parentIssue = json.data.issueCreate.issue
-    s.stop(pc.green(`부모 이슈: ${parentIssue.identifier}`))
+    s.stop(pc.green(`Parent issue: ${parentIssue.identifier}`))
   } catch (e) {
-    s.stop(pc.red("부모 이슈 생성 실패"))
+    s.stop(pc.red("Failed to create parent issue"))
     console.log(pc.red((e as Error).message))
     process.exit(1)
   }
 
   // Step 4: Create sub-issues
   const createdIds: Array<{ id: string; identifier: string; index: number }> = []
-  s.start(`하위 이슈 생성 중 (0/${result.subIssues.length})...`)
+  s.start(`Creating sub-issues (0/${result.subIssues.length})...`)
 
   for (let i = 0; i < result.subIssues.length; i++) {
     const sub = result.subIssues[i]
@@ -220,15 +220,15 @@ export async function executeBreakdown(input: string, opts: { yes?: boolean }): 
     try {
       const created = await createSubIssue(apiKey, teamUuid, parentIssue.id, sub.title, sub.description, todoStateId)
       createdIds.push({ id: created.id, identifier: created.identifier, index: i + 1 })
-      s.message(`하위 이슈 생성 중 (${i + 1}/${result.subIssues.length})...`)
+      s.message(`Creating sub-issues (${i + 1}/${result.subIssues.length})...`)
     } catch (e) {
-      s.stop(pc.yellow(`하위 이슈 ${i + 1} 생성 실패`))
-      console.log(pc.yellow(`경고: ${(e as Error).message}`))
-      console.log(pc.dim(`이미 생성된 이슈: ${createdIds.map((c) => c.identifier).join(", ") || "없음"}`))
+      s.stop(pc.yellow(`Failed to create sub-issue ${i + 1}`))
+      console.log(pc.yellow(`Warning: ${(e as Error).message}`))
+      console.log(pc.dim(`Already created: ${createdIds.map((c) => c.identifier).join(", ") || "none"}`))
       // Continue with remaining sub-issues
     }
   }
-  s.stop(pc.green(`하위 이슈 ${createdIds.length}개 생성 완료`))
+  s.stop(pc.green(`Created ${createdIds.length} sub-issues`))
 
   // Step 5: Create relations
   let relationsCreated = 0
@@ -254,8 +254,8 @@ export async function executeBreakdown(input: string, opts: { yes?: boolean }): 
     `${pc.bold(parentIssue.identifier)}: ${parentIssue.title}`,
     pc.dim(parentIssue.url),
     "",
-    `하위 이슈: ${pc.green(String(createdIds.length))}개`,
-    `의존 관계: ${pc.yellow(String(relationsCreated))}개`,
+    `Sub-issues: ${pc.green(String(createdIds.length))}`,
+    `Dependencies: ${pc.yellow(String(relationsCreated))}`,
     "",
   ]
   for (const created of createdIds) {

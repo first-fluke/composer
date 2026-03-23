@@ -11,7 +11,7 @@ export function TeamPanel({ teamState }: TeamPanelProps) {
   if (nodes.length === 0) return null
 
   return (
-    <div className="absolute bottom-4 right-4 bg-gray-800/90 rounded-lg p-4 min-w-64 border border-gray-700">
+    <div className="absolute top-4 left-4 bg-gray-800/90 rounded-lg p-4 min-w-64 border border-gray-700">
       <h2 className="text-sm font-bold text-gray-300 mb-3">Team Members</h2>
 
       <div className="space-y-3">

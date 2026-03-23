@@ -10,10 +10,8 @@ export interface ActiveWorkspace {
 
 export interface SystemMetrics {
   memoryRss: number
-  memoryHeapUsed: number
-  memoryHeapTotal: number
+  memoryTotal: number
   cpuUser: number
-  cpuSystem: number
   uptime: number
 }
 

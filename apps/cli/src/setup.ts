@@ -167,8 +167,8 @@ async function stepApiKey(ctx: Partial<SetupContext>, step: number, total: numbe
     placeholder: "lin_api_xxx",
     initialValue: ctx.apiKey,
     validate: (v) => {
-      if (!v) return "필수 입력입니다"
-      if (!v.startsWith("lin_api_")) return "lin_api_ 로 시작해야 합니다. Settings → API 에서 발급하세요"
+      if (!v) return "Required"
+      if (!v.startsWith("lin_api_")) return "Must start with lin_api_. Generate one at Settings → API"
     },
   })
   if (p.isCancel(apiKey)) return CANCEL
@@ -181,7 +181,7 @@ async function stepTeam(ctx: Partial<SetupContext>, step: number, total: number)
   if (!ctx.apiKey) return BACK
 
   const s = p.spinner()
-  s.start("Linear 팀 조회 중...")
+  s.start("Fetching Linear teams...")
 
   try {
     const [teamsData, viewerData] = await Promise.all([
@@ -191,20 +191,20 @@ async function stepTeam(ctx: Partial<SetupContext>, step: number, total: number)
     ctx.teams = (teamsData as Record<string, Record<string, unknown>>).teams?.nodes as LinearTeam[]
     ctx.orgUrlKey = (viewerData as Record<string, Record<string, Record<string, unknown>>>).viewer?.organization
       ?.urlKey as string
-    s.stop("팀 조회 완료")
+    s.stop("Teams fetched")
   } catch (e) {
-    s.stop(pc.red("Linear API 호출 실패"))
-    p.log.error(`API 키를 확인하세요: ${(e as Error).message}`)
+    s.stop(pc.red("Linear API call failed"))
+    p.log.error(`Check your API key: ${(e as Error).message}`)
     return BACK
   }
 
   if (ctx.teams.length === 0) {
-    p.log.error("팀이 없습니다. Linear에서 팀을 먼저 생성하세요.")
+    p.log.error("No teams found. Create a team in Linear first.")
     return BACK
   }
 
   const teamUuid = await p.select({
-    message: stepLabel(step, total, "팀을 선택하세요"),
+    message: stepLabel(step, total, "Select a team"),
     options: ctx.teams.map((t) => ({ value: t.id, label: `${t.name} (${t.key})` })),
   })
   if (p.isCancel(teamUuid)) return CANCEL
@@ -218,15 +218,15 @@ async function stepWorkflowStates(ctx: Partial<SetupContext>, step: number, tota
   if (!ctx.apiKey || !ctx.teamUuid) return BACK
 
   const s = p.spinner()
-  s.start("워크플로우 상태 조회 중...")
+  s.start("Fetching workflow states...")
 
   try {
     const data = await linearQuery(ctx.apiKey, `{ team(id: "${ctx.teamUuid}") { states { nodes { id name type } } } }`)
     ctx.states = (data as Record<string, Record<string, Record<string, unknown>>>).team?.states
       ?.nodes as WorkflowState[]
-    s.stop("워크플로우 상태 조회 완료")
+    s.stop("Workflow states fetched")
   } catch (e) {
-    s.stop(pc.red("워크플로우 상태 조회 실패"))
+    s.stop(pc.red("Failed to fetch workflow states"))
     p.log.error((e as Error).message)
     return BACK
   }
@@ -237,7 +237,7 @@ async function stepWorkflowStates(ctx: Partial<SetupContext>, step: number, tota
   const cancelledState = findWorkflowState(ctx.states, ["Canceled", "Cancelled"], "canceled")
 
   const fmt = (label: string, st: WorkflowState | undefined) =>
-    st ? `${label}: ${pc.green(st.name)} ${pc.dim(st.id)}` : `${label}: ${pc.red("매핑 실패")}`
+    st ? `${label}: ${pc.green(st.name)} ${pc.dim(st.id)}` : `${label}: ${pc.red("mapping failed")}`
 
   p.note(
     [
@@ -246,14 +246,14 @@ async function stepWorkflowStates(ctx: Partial<SetupContext>, step: number, tota
       fmt("Done", doneState),
       fmt("Cancelled", cancelledState),
     ].join("\n"),
-    stepLabel(step, total, "워크플로우 상태 매핑"),
+    stepLabel(step, total, "Workflow State Mapping"),
   )
 
   const stateOptions = ctx.states.map((st) => ({ value: st.id, label: `${st.name} (${st.type})` }))
 
   const selectMissing = async (label: string, current: WorkflowState | undefined) => {
     if (current) return current
-    const id = await p.select({ message: `${label} 상태를 선택하세요`, options: stateOptions })
+    const id = await p.select({ message: `Select the ${label} state`, options: stateOptions })
     if (p.isCancel(id)) return CANCEL
     const found = (ctx.states ?? []).find((st) => st.id === id)
     if (!found) return CANCEL
@@ -283,19 +283,19 @@ async function stepWebhook(ctx: Partial<SetupContext>, step: number, total: numb
 
   p.note(
     [
-      `${pc.cyan(webhookUrl)} 에서:`,
+      `Go to ${pc.cyan(webhookUrl)}:`,
       "",
-      `1. ${pc.bold("Create webhook")} 클릭`,
+      `1. Click ${pc.bold("Create webhook")}`,
       `2. Label: ${pc.dim("Symphony")}`,
-      `3. URL: ngrok 터널 URL + ${pc.bold("/webhook")}`,
-      `4. Events: ${pc.bold("Issues")} 체크`,
-      `5. Team: ${pc.bold(ctx.selectedTeam.name)} 선택`,
-      `6. 생성 후 Signing secret 복사`,
+      `3. URL: your ngrok tunnel URL + ${pc.bold("/webhook")}`,
+      `4. Events: check ${pc.bold("Issues")}`,
+      `5. Team: select ${pc.bold(ctx.selectedTeam.name)}`,
+      `6. Copy the Signing secret after creation`,
     ].join("\n"),
-    stepLabel(step, total, "Webhook 설정 안내"),
+    stepLabel(step, total, "Webhook Setup Guide"),
   )
 
-  const ready = await p.confirm({ message: "Linear에서 webhook 설정을 완료했나요?" })
+  const ready = await p.confirm({ message: "Have you completed the webhook setup in Linear?" })
   if (p.isCancel(ready)) return CANCEL
   if (!ready) return BACK
 
@@ -304,7 +304,7 @@ async function stepWebhook(ctx: Partial<SetupContext>, step: number, total: numb
     placeholder: "lin_wh_xxx",
     initialValue: ctx.webhookSecret,
     validate: (v) => {
-      if (!v) return "필수 입력입니다"
+      if (!v) return "Required"
     },
   })
   if (p.isCancel(webhookSecret)) return CANCEL
@@ -317,12 +317,12 @@ async function stepWorkspace(ctx: Partial<SetupContext>, step: number, total: nu
   const defaultWorkspace = ctx.workspaceRoot ?? `${process.env.HOME}/workspaces`
 
   const workspaceRoot = await p.text({
-    message: stepLabel(step, total, "에이전트 워크스페이스 경로 (절대경로)"),
+    message: stepLabel(step, total, "Agent workspace path (absolute)"),
     placeholder: `${process.env.HOME}/workspaces`,
     initialValue: defaultWorkspace,
     validate: (v) => {
-      if (!v) return "필수 입력입니다"
-      if (!v.startsWith("/")) return "절대경로여야 합니다"
+      if (!v) return "Required"
+      if (!v.startsWith("/")) return "Must be an absolute path"
     },
   })
   if (p.isCancel(workspaceRoot)) return CANCEL
@@ -333,7 +333,7 @@ async function stepWorkspace(ctx: Partial<SetupContext>, step: number, total: nu
 
 async function stepAgentType(ctx: Partial<SetupContext>, step: number, total: number): Promise<StepResult> {
   const agentType = await p.select({
-    message: stepLabel(step, total, "사용할 에이전트"),
+    message: stepLabel(step, total, "Select agent"),
     options: [
       { value: "claude", label: "Claude", hint: "Anthropic Claude Code" },
       { value: "codex", label: "Codex", hint: "OpenAI Codex" },
@@ -353,13 +353,13 @@ async function stepParallel(ctx: Partial<SetupContext>, step: number, total: num
     [
       `CPU: ${pc.cyan(String(hw.cpuCores))} cores`,
       `RAM: ${pc.cyan(String(hw.totalMemoryGB))} GB`,
-      `추천 동시 에이전트 수: ${pc.green(String(hw.recommended))}`,
+      `Recommended parallel agents: ${pc.green(String(hw.recommended))}`,
     ].join("\n"),
-    stepLabel(step, total, "하드웨어 감지"),
+    stepLabel(step, total, "Hardware Detection"),
   )
 
   const useRecommended = await p.confirm({
-    message: `동시 에이전트 수를 ${pc.green(String(hw.recommended))}개로 설정할까요?`,
+    message: `Set parallel agents to ${pc.green(String(hw.recommended))}?`,
     initialValue: true,
   })
   if (p.isCancel(useRecommended)) return CANCEL
@@ -368,11 +368,11 @@ async function stepParallel(ctx: Partial<SetupContext>, step: number, total: num
     ctx.maxParallel = hw.recommended
   } else {
     const custom = await p.text({
-      message: "동시 에이전트 수 (직접 입력)",
+      message: "Number of parallel agents",
       initialValue: String(ctx.maxParallel ?? hw.cpuCores),
       validate: (v) => {
         const n = Number(v)
-        if (!Number.isInteger(n) || n < 1) return "1 이상의 정수를 입력하세요"
+        if (!Number.isInteger(n) || n < 1) return "Must be a positive integer"
       },
     })
     if (p.isCancel(custom)) return CANCEL
@@ -423,14 +423,14 @@ async function saveEnv(ctx: SetupContext): Promise<void> {
 
   if (!existsSync(ctx.workspaceRoot)) {
     mkdirSync(ctx.workspaceRoot, { recursive: true })
-    p.log.success(`워크스페이스 디렉토리 생성: ${ctx.workspaceRoot}`)
+    p.log.success(`Workspace directory created: ${ctx.workspaceRoot}`)
   }
 }
 
 // ── Fast track (invite clipboard) ────────────────────────────────────────────
 
 async function fastTrackSetup(invite: InviteData): Promise<void> {
-  p.log.info(pc.green("초대 데이터가 감지되었습니다. 팀 설정을 불러옵니다."))
+  p.log.info(pc.green("Invite data detected. Loading team configuration."))
 
   const ctx: Partial<SetupContext> = {
     teamUuid: invite.teamUuid,
@@ -460,7 +460,7 @@ async function fastTrackSetup(invite: InviteData): Promise<void> {
       continue
     }
     if (result === CANCEL) {
-      p.cancel("취소되었습니다")
+      p.cancel("Cancelled")
       process.exit(0)
     }
     i++
@@ -468,7 +468,7 @@ async function fastTrackSetup(invite: InviteData): Promise<void> {
 
   // All values guaranteed by step loop above
   if (!ctx.apiKey || !ctx.workspaceRoot || ctx.maxParallel == null) {
-    p.log.error("설정 값이 누락되었습니다. 다시 시도하세요.")
+    p.log.error("Missing configuration values. Please try again.")
     process.exit(1)
   }
 
@@ -490,15 +490,15 @@ async function fastTrackSetup(invite: InviteData): Promise<void> {
   }
 
   // Final preview
-  p.note(renderPreview(fullCtx), "설정 확인")
-  const confirmed = await p.confirm({ message: "이대로 저장할까요?" })
+  p.note(renderPreview(fullCtx), "Configuration Review")
+  const confirmed = await p.confirm({ message: "Save this configuration?" })
   if (p.isCancel(confirmed) || !confirmed) {
-    p.cancel("취소되었습니다")
+    p.cancel("Cancelled")
     process.exit(0)
   }
 
   await saveEnv(fullCtx)
-  p.outro(pc.green("설정 완료! `bun av` 로 서버를 시작하세요."))
+  p.outro(pc.green("Setup complete! Start the server with `bun av`."))
 }
 
 // ── Edit mode (partial reconfiguration) ──────────────────────────────────────
@@ -506,9 +506,9 @@ async function fastTrackSetup(invite: InviteData): Promise<void> {
 const EDITABLE_FIELDS: { value: string; label: string }[] = [
   { value: "apiKey", label: "Linear API Key" },
   { value: "webhookSecret", label: "Webhook Secret" },
-  { value: "workspaceRoot", label: "워크스페이스 경로" },
-  { value: "agentType", label: "에이전트 타입" },
-  { value: "maxParallel", label: "동시 에이전트 수" },
+  { value: "workspaceRoot", label: "Workspace Path" },
+  { value: "agentType", label: "Agent Type" },
+  { value: "maxParallel", label: "Parallel Agents" },
 ]
 
 export async function setupEdit(): Promise<void> {
@@ -516,17 +516,17 @@ export async function setupEdit(): Promise<void> {
 
   const existing = loadExistingEnv()
   if (!existing) {
-    p.log.error(".env 파일이 없습니다. `bun av setup`을 먼저 실행하세요.")
+    p.log.error("No .env file found. Run `bun av setup` first.")
     process.exit(1)
   }
 
   const fields = await p.multiselect({
-    message: "변경할 항목을 선택하세요",
+    message: "Select fields to change",
     options: EDITABLE_FIELDS,
     required: true,
   })
   if (p.isCancel(fields)) {
-    p.cancel("취소되었습니다")
+    p.cancel("Cancelled")
     process.exit(0)
   }
 
@@ -538,12 +538,12 @@ export async function setupEdit(): Promise<void> {
       placeholder: "lin_api_xxx",
       initialValue: existing.apiKey,
       validate: (v) => {
-        if (!v) return "필수 입력입니다"
-        if (!v.startsWith("lin_api_")) return "lin_api_ 로 시작해야 합니다"
+        if (!v) return "Required"
+        if (!v.startsWith("lin_api_")) return "Must start with lin_api_"
       },
     })
     if (p.isCancel(apiKey)) {
-      p.cancel("취소되었습니다")
+      p.cancel("Cancelled")
       process.exit(0)
     }
     existing.apiKey = apiKey
@@ -555,11 +555,11 @@ export async function setupEdit(): Promise<void> {
       placeholder: "lin_wh_xxx",
       initialValue: existing.webhookSecret,
       validate: (v) => {
-        if (!v) return "필수 입력입니다"
+        if (!v) return "Required"
       },
     })
     if (p.isCancel(secret)) {
-      p.cancel("취소되었습니다")
+      p.cancel("Cancelled")
       process.exit(0)
     }
     existing.webhookSecret = secret
@@ -567,15 +567,15 @@ export async function setupEdit(): Promise<void> {
 
   if (selectedFields.includes("workspaceRoot")) {
     const root = await p.text({
-      message: "에이전트 워크스페이스 경로 (절대경로)",
+      message: "Agent workspace path (absolute)",
       initialValue: existing.workspaceRoot,
       validate: (v) => {
-        if (!v) return "필수 입력입니다"
-        if (!v.startsWith("/")) return "절대경로여야 합니다"
+        if (!v) return "Required"
+        if (!v.startsWith("/")) return "Must be an absolute path"
       },
     })
     if (p.isCancel(root)) {
-      p.cancel("취소되었습니다")
+      p.cancel("Cancelled")
       process.exit(0)
     }
     existing.workspaceRoot = root
@@ -583,7 +583,7 @@ export async function setupEdit(): Promise<void> {
 
   if (selectedFields.includes("agentType")) {
     const agent = await p.select({
-      message: "사용할 에이전트",
+      message: "Select agent",
       options: [
         { value: "claude", label: "Claude", hint: "Anthropic Claude Code" },
         { value: "codex", label: "Codex", hint: "OpenAI Codex" },
@@ -591,7 +591,7 @@ export async function setupEdit(): Promise<void> {
       ],
     })
     if (p.isCancel(agent)) {
-      p.cancel("취소되었습니다")
+      p.cancel("Cancelled")
       process.exit(0)
     }
     existing.agentType = agent
@@ -603,20 +603,20 @@ export async function setupEdit(): Promise<void> {
       [
         `CPU: ${pc.cyan(String(hw.cpuCores))} cores`,
         `RAM: ${pc.cyan(String(hw.totalMemoryGB))} GB`,
-        `추천: ${pc.green(String(hw.recommended))}`,
+        `Recommended: ${pc.green(String(hw.recommended))}`,
       ].join("\n"),
-      "하드웨어 감지",
+      "Hardware Detection",
     )
     const val = await p.text({
-      message: "동시 에이전트 수",
+      message: "Number of parallel agents",
       initialValue: String(existing.maxParallel ?? hw.recommended),
       validate: (v) => {
         const n = Number(v)
-        if (!Number.isInteger(n) || n < 1) return "1 이상의 정수를 입력하세요"
+        if (!Number.isInteger(n) || n < 1) return "Must be a positive integer"
       },
     })
     if (p.isCancel(val)) {
-      p.cancel("취소되었습니다")
+      p.cancel("Cancelled")
       process.exit(0)
     }
     existing.maxParallel = Number(val)
@@ -638,7 +638,7 @@ export async function setupEdit(): Promise<void> {
   ]
   for (const key of required) {
     if (!existing[key]) {
-      p.log.error(`${key} 값이 없습니다. 전체 설정을 다시 실행하세요: bun av setup`)
+      p.log.error(`Missing value for ${key}. Run full setup again: bun av setup`)
       process.exit(1)
     }
   }
@@ -657,12 +657,12 @@ export async function setupEdit(): Promise<void> {
         return l
       })
       .join("\n"),
-    "변경 후 설정",
+    "Updated Configuration",
   )
 
-  const confirmed = await p.confirm({ message: "이대로 저장할까요?" })
+  const confirmed = await p.confirm({ message: "Save this configuration?" })
   if (p.isCancel(confirmed) || !confirmed) {
-    p.cancel("취소되었습니다")
+    p.cancel("Cancelled")
     process.exit(0)
   }
 
@@ -670,10 +670,10 @@ export async function setupEdit(): Promise<void> {
 
   if (existing.workspaceRoot && !existsSync(existing.workspaceRoot)) {
     mkdirSync(existing.workspaceRoot, { recursive: true })
-    p.log.success(`워크스페이스 디렉토리 생성: ${existing.workspaceRoot}`)
+    p.log.success(`Workspace directory created: ${existing.workspaceRoot}`)
   }
 
-  p.outro(pc.green("설정 변경 완료!"))
+  p.outro(pc.green("Configuration updated!"))
 }
 
 // ── Full setup ───────────────────────────────────────────────────────────────
@@ -683,9 +683,9 @@ export async function setup(): Promise<void> {
 
   // ── Check existing .env ────────────────────────────────────────────────────
   if (existsSync(".env")) {
-    const overwrite = await p.confirm({ message: ".env 파일이 이미 존재합니다. 덮어쓸까요?" })
+    const overwrite = await p.confirm({ message: ".env file already exists. Overwrite?" })
     if (p.isCancel(overwrite) || !overwrite) {
-      p.cancel("취소되었습니다")
+      p.cancel("Cancelled")
       process.exit(0)
     }
   }
@@ -693,7 +693,7 @@ export async function setup(): Promise<void> {
   // ── Detect invite in clipboard ─────────────────────────────────────────────
   const invite = await detectInviteFromClipboard()
   if (invite) {
-    const useInvite = await p.confirm({ message: "클립보드에서 초대 데이터가 감지되었습니다. 사용할까요?" })
+    const useInvite = await p.confirm({ message: "Invite data detected in clipboard. Use it?" })
     if (!p.isCancel(useInvite) && useInvite) {
       return fastTrackSetup(invite)
     }
@@ -723,7 +723,7 @@ export async function setup(): Promise<void> {
       continue
     }
     if (result === CANCEL) {
-      p.cancel("취소되었습니다")
+      p.cancel("Cancelled")
       process.exit(0)
     }
     i++
@@ -732,14 +732,14 @@ export async function setup(): Promise<void> {
   const fullCtx = ctx as SetupContext
 
   // ── Final preview ──────────────────────────────────────────────────────────
-  p.note(renderPreview(fullCtx), "설정 확인")
+  p.note(renderPreview(fullCtx), "Configuration Review")
 
-  const confirmed = await p.confirm({ message: "이대로 저장할까요?" })
+  const confirmed = await p.confirm({ message: "Save this configuration?" })
   if (p.isCancel(confirmed) || !confirmed) {
-    p.cancel("취소되었습니다")
+    p.cancel("Cancelled")
     process.exit(0)
   }
 
   await saveEnv(fullCtx)
-  p.outro(pc.green("설정 완료! `bun av` 로 서버를 시작하세요."))
+  p.outro(pc.green("Setup complete! Start the server with `bun av`."))
 }

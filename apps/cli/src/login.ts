@@ -50,21 +50,21 @@ export function clearCredentials(): void {
 
 async function loginWithEmail(supabaseUrl: string, supabaseAnonKey: string): Promise<Credentials> {
   const email = await p.text({
-    message: "이메일",
+    message: "Email",
     placeholder: "you@company.com",
-    validate: (v) => (!v?.includes("@") ? "유효한 이메일을 입력하세요" : undefined),
+    validate: (v) => (!v?.includes("@") ? "Please enter a valid email" : undefined),
   })
   if (p.isCancel(email)) {
-    p.cancel("취소되었습니다")
+    p.cancel("Cancelled")
     process.exit(0)
   }
 
   const password = await p.password({
-    message: "비밀번호",
-    validate: (v) => ((v?.length ?? 0) < 6 ? "비밀번호는 6자 이상이어야 합니다" : undefined),
+    message: "Password",
+    validate: (v) => ((v?.length ?? 0) < 6 ? "Password must be at least 6 characters" : undefined),
   })
   if (p.isCancel(password)) {
-    p.cancel("취소되었습니다")
+    p.cancel("Cancelled")
     process.exit(0)
   }
 
@@ -79,7 +79,7 @@ async function loginWithEmail(supabaseUrl: string, supabaseAnonKey: string): Pro
 
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
-    const msg = (body.error_description ?? body.msg ?? "로그인 실패") as string
+    const msg = (body.error_description ?? body.msg ?? "Login failed") as string
     throw new Error(msg)
   }
 
@@ -102,21 +102,21 @@ async function loginWithEmail(supabaseUrl: string, supabaseAnonKey: string): Pro
 
 async function signupWithEmail(supabaseUrl: string, supabaseAnonKey: string): Promise<Credentials> {
   const email = await p.text({
-    message: "이메일",
+    message: "Email",
     placeholder: "you@company.com",
-    validate: (v) => (!v?.includes("@") ? "유효한 이메일을 입력하세요" : undefined),
+    validate: (v) => (!v?.includes("@") ? "Please enter a valid email" : undefined),
   })
   if (p.isCancel(email)) {
-    p.cancel("취소되었습니다")
+    p.cancel("Cancelled")
     process.exit(0)
   }
 
   const password = await p.password({
-    message: "비밀번호 (6자 이상)",
-    validate: (v) => ((v?.length ?? 0) < 6 ? "비밀번호는 6자 이상이어야 합니다" : undefined),
+    message: "Password (min 6 characters)",
+    validate: (v) => ((v?.length ?? 0) < 6 ? "Password must be at least 6 characters" : undefined),
   })
   if (p.isCancel(password)) {
-    p.cancel("취소되었습니다")
+    p.cancel("Cancelled")
     process.exit(0)
   }
 
@@ -131,7 +131,7 @@ async function signupWithEmail(supabaseUrl: string, supabaseAnonKey: string): Pr
 
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
-    const msg = (body.error_description ?? body.msg ?? "가입 실패") as string
+    const msg = (body.error_description ?? body.msg ?? "Signup failed") as string
     throw new Error(msg)
   }
 
@@ -143,7 +143,7 @@ async function signupWithEmail(supabaseUrl: string, supabaseAnonKey: string): Pr
   }
 
   if (!data.access_token) {
-    p.log.info("이메일 확인 링크가 발송되었습니다. 확인 후 다시 로그인하세요.")
+    p.log.info("A verification link has been sent to your email. Please verify and log in again.")
     process.exit(0)
   }
 
@@ -162,10 +162,10 @@ export async function login(): Promise<void> {
 
   const existing = loadCredentials()
   if (existing && existing.expiresAt > Date.now()) {
-    p.log.info(`이미 로그인되어 있습니다: ${existing.email}`)
-    const relogin = await p.confirm({ message: "다시 로그인하시겠어요?" })
+    p.log.info(`Already logged in as: ${existing.email}`)
+    const relogin = await p.confirm({ message: "Log in again?" })
     if (p.isCancel(relogin) || !relogin) {
-      p.outro("기존 로그인 유지")
+      p.outro("Keeping existing login")
       return
     }
   }
@@ -173,37 +173,37 @@ export async function login(): Promise<void> {
   const supabaseUrl = await p.text({
     message: "Supabase URL",
     placeholder: "https://xxx.supabase.co",
-    validate: (v) => (!v?.startsWith("https://") ? "https://로 시작해야 합니다" : undefined),
+    validate: (v) => (!v?.startsWith("https://") ? "Must start with https://" : undefined),
   })
   if (p.isCancel(supabaseUrl)) {
-    p.cancel("취소되었습니다")
+    p.cancel("Cancelled")
     process.exit(0)
   }
 
   const supabaseAnonKey = await p.text({
     message: "Supabase Anon Key",
     placeholder: "eyJhbGciOiJIUzI1NiIs...",
-    validate: (v) => ((v?.length ?? 0) < 20 ? "유효한 키를 입력하세요" : undefined),
+    validate: (v) => ((v?.length ?? 0) < 20 ? "Please enter a valid key" : undefined),
   })
   if (p.isCancel(supabaseAnonKey)) {
-    p.cancel("취소되었습니다")
+    p.cancel("Cancelled")
     process.exit(0)
   }
 
   const action = await p.select({
-    message: "로그인 방식",
+    message: "Authentication method",
     options: [
-      { value: "login", label: "기존 계정으로 로그인" },
-      { value: "signup", label: "새 계정 만들기" },
+      { value: "login", label: "Log in with existing account" },
+      { value: "signup", label: "Create new account" },
     ],
   })
   if (p.isCancel(action)) {
-    p.cancel("취소되었습니다")
+    p.cancel("Cancelled")
     process.exit(0)
   }
 
   const spinner = p.spinner()
-  spinner.start("인증 중...")
+  spinner.start("Authenticating...")
 
   try {
     const creds =
@@ -212,20 +212,20 @@ export async function login(): Promise<void> {
         : await loginWithEmail(supabaseUrl as string, supabaseAnonKey as string)
 
     saveCredentials(creds)
-    spinner.stop("인증 완료")
+    spinner.stop("Authentication complete")
 
-    p.log.success(`${creds.email} 로 로그인되었습니다`)
-    p.log.info(`자격증명 저장: ${CREDENTIALS_FILE}`)
-    p.outro(pc.green("로그인 완료!"))
+    p.log.success(`Logged in as ${creds.email}`)
+    p.log.info(`Credentials saved: ${CREDENTIALS_FILE}`)
+    p.outro(pc.green("Login complete!"))
   } catch (err) {
-    spinner.stop("인증 실패")
+    spinner.stop("Authentication failed")
     p.log.error(String(err instanceof Error ? err.message : err))
-    p.outro(pc.red("로그인에 실패했습니다. 다시 시도하세요."))
+    p.outro(pc.red("Login failed. Please try again."))
     process.exit(1)
   }
 }
 
 export async function logout(): Promise<void> {
   clearCredentials()
-  p.log.success("로그아웃 완료")
+  p.log.success("Logged out")
 }

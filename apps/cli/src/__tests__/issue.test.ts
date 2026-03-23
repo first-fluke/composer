@@ -3,27 +3,27 @@ import { parseExpandedIssue, parseIssueInput } from "../issue"
 
 describe("parseIssueInput", () => {
   it("splits title and description on newline", () => {
-    const result = parseIssueInput("로그인 기능 추가\nJWT 토큰 발급, bcrypt 검증 포함")
-    expect(result.title).toBe("로그인 기능 추가")
-    expect(result.description).toBe("JWT 토큰 발급, bcrypt 검증 포함")
+    const result = parseIssueInput("Add login feature\nJWT token issuance, bcrypt validation included")
+    expect(result.title).toBe("Add login feature")
+    expect(result.description).toBe("JWT token issuance, bcrypt validation included")
   })
 
   it("uses full text as title when no newline", () => {
-    const result = parseIssueInput("로그인 기능 추가")
-    expect(result.title).toBe("로그인 기능 추가")
+    const result = parseIssueInput("Add login feature")
+    expect(result.title).toBe("Add login feature")
     expect(result.description).toBe("")
   })
 
   it("trims whitespace", () => {
-    const result = parseIssueInput("  제목  \n  설명  ")
-    expect(result.title).toBe("제목")
-    expect(result.description).toBe("설명")
+    const result = parseIssueInput("  title  \n  description  ")
+    expect(result.title).toBe("title")
+    expect(result.description).toBe("description")
   })
 
   it("handles multi-line description", () => {
-    const result = parseIssueInput("제목\n줄1\n줄2\n줄3")
-    expect(result.title).toBe("제목")
-    expect(result.description).toBe("줄1\n줄2\n줄3")
+    const result = parseIssueInput("title\nline1\nline2\nline3")
+    expect(result.title).toBe("title")
+    expect(result.description).toBe("line1\nline2\nline3")
   })
 
   it("handles empty string", () => {
@@ -35,33 +35,33 @@ describe("parseIssueInput", () => {
 
 describe("parseExpandedIssue", () => {
   it("parses TITLE and DESCRIPTION from Claude output", () => {
-    const output = `TITLE: feat(auth): 로그인 API 엔드포인트 구현
+    const output = `TITLE: feat(auth): implement login API endpoint
 DESCRIPTION:
 ## Goal
-POST /auth/login 엔드포인트를 구현한다.
+Implement POST /auth/login endpoint.
 
 ## Requirements
-- JWT 토큰 발급
-- bcrypt 비밀번호 검증
-- 실패 시 401 응답`
+- JWT token issuance
+- bcrypt password verification
+- 401 response on failure`
 
     const result = parseExpandedIssue(output)
-    expect(result.title).toBe("feat(auth): 로그인 API 엔드포인트 구현")
+    expect(result.title).toBe("feat(auth): implement login API endpoint")
     expect(result.description).toContain("## Goal")
-    expect(result.description).toContain("JWT 토큰 발급")
+    expect(result.description).toContain("JWT token issuance")
   })
 
   it("handles missing DESCRIPTION", () => {
-    const output = "TITLE: fix(server): 서버 크래시 수정"
+    const output = "TITLE: fix(server): fix server crash"
     const result = parseExpandedIssue(output)
-    expect(result.title).toBe("fix(server): 서버 크래시 수정")
+    expect(result.title).toBe("fix(server): fix server crash")
     expect(result.description).toBe("")
   })
 
   it("falls back to first 80 chars when no TITLE marker", () => {
-    const output = "그냥 텍스트만 있는 경우"
+    const output = "just plain text without markers"
     const result = parseExpandedIssue(output)
-    expect(result.title).toBe("그냥 텍스트만 있는 경우")
+    expect(result.title).toBe("just plain text without markers")
   })
 
   it("truncates fallback title at 80 chars", () => {
@@ -71,24 +71,24 @@ POST /auth/login 엔드포인트를 구현한다.
   })
 
   it("handles multiline description with sections", () => {
-    const output = `TITLE: feat(api): 사용자 프로필 API
+    const output = `TITLE: feat(api): user profile API
 DESCRIPTION:
 ## Goal
-사용자 프로필 CRUD API를 구현한다.
+Implement user profile CRUD API.
 
 ## Requirements
 - GET /users/:id
 - PATCH /users/:id
-- 인증 미들웨어 적용
+- Apply auth middleware
 
 ## Notes
-- 기존 User 모델 활용`
+- Use existing User model`
 
     const result = parseExpandedIssue(output)
-    expect(result.title).toBe("feat(api): 사용자 프로필 API")
+    expect(result.title).toBe("feat(api): user profile API")
     expect(result.description).toContain("## Goal")
     expect(result.description).toContain("## Requirements")
     expect(result.description).toContain("## Notes")
-    expect(result.description).toContain("기존 User 모델 활용")
+    expect(result.description).toContain("Use existing User model")
   })
 })

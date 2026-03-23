@@ -6,19 +6,8 @@ interface SystemMetricsPanelProps {
   metrics: SystemMetrics | undefined
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(0)} KB`
-  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
-  return `${(bytes / 1024 ** 3).toFixed(2)} GB`
-}
-
-function formatUptime(seconds: number): string {
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = Math.floor(seconds % 60)
-  if (h > 0) return `${h}h ${m}m`
-  if (m > 0) return `${m}m ${s}s`
-  return `${s}s`
+function formatGB(bytes: number): string {
+  return `${(bytes / 1024 ** 3).toFixed(1)} GB`
 }
 
 function Bar({ value, max, color }: { value: number; max: number; color: string }) {
@@ -27,7 +16,7 @@ function Bar({ value, max, color }: { value: number; max: number; color: string 
   return (
     <div className="h-2 w-full rounded-full bg-gray-700">
       <div
-        className={`h-2 rounded-full ${color}`}
+        className={`h-2 rounded-full bar-stripe ${color}`}
         style={{ width: `${pct}%`, transition: "width 0.5s ease" }}
       />
     </div>
@@ -37,68 +26,46 @@ function Bar({ value, max, color }: { value: number; max: number; color: string 
 export function SystemMetricsPanel({ metrics }: SystemMetricsPanelProps) {
   if (!metrics) return null
 
-  const heapPct = metrics.memoryHeapTotal > 0
-    ? Math.round((metrics.memoryHeapUsed / metrics.memoryHeapTotal) * 100)
+  const memPct = metrics.memoryTotal > 0
+    ? Math.round((metrics.memoryRss / metrics.memoryTotal) * 100)
     : 0
 
-  const cpuTotal = metrics.cpuUser + metrics.cpuSystem
-  // cpuUsage returns microseconds, normalize for display
-  const cpuUserPct = cpuTotal > 0 ? Math.round((metrics.cpuUser / cpuTotal) * 100) : 0
+  const cpuPct = metrics.cpuUser
 
   return (
     <div className="absolute bottom-4 right-4 bg-gray-800/90 rounded-lg p-4 min-w-56 border border-gray-700">
       <h2 className="text-sm font-bold text-gray-300 mb-3">System</h2>
 
       <div className="space-y-3 text-xs">
-        {/* Memory RSS */}
+        {/* Memory */}
         <div>
           <div className="flex justify-between mb-1">
-            <span className="text-gray-400">RSS</span>
-            <span className="text-white">{formatBytes(metrics.memoryRss)}</span>
-          </div>
-        </div>
-
-        {/* Heap */}
-        <div>
-          <div className="flex justify-between mb-1">
-            <span className="text-gray-400">Heap</span>
+            <span className="text-gray-400">Memory</span>
             <span className="text-white">
-              {formatBytes(metrics.memoryHeapUsed)} / {formatBytes(metrics.memoryHeapTotal)}
-              <span className="text-gray-500 ml-1">({heapPct}%)</span>
+              {formatGB(metrics.memoryRss)} / {formatGB(metrics.memoryTotal)}
+              <span className="text-gray-500 ml-1">({memPct}%)</span>
             </span>
           </div>
           <Bar
-            value={metrics.memoryHeapUsed}
-            max={metrics.memoryHeapTotal}
-            color={heapPct > 85 ? "bg-red-500" : heapPct > 60 ? "bg-yellow-500" : "bg-green-500"}
+            value={metrics.memoryRss}
+            max={metrics.memoryTotal}
+            color={memPct > 85 ? "bg-red-500" : memPct > 60 ? "bg-yellow-500" : "bg-green-500"}
           />
         </div>
 
-        {/* CPU split */}
+        {/* CPU */}
         <div>
           <div className="flex justify-between mb-1">
             <span className="text-gray-400">CPU</span>
-            <span className="text-white">
-              user {cpuUserPct}% / sys {100 - cpuUserPct}%
-            </span>
+            <span className="text-white">{cpuPct}%</span>
           </div>
-          <div className="flex h-2 w-full rounded-full overflow-hidden bg-gray-700">
-            <div
-              className="bg-blue-500 h-2"
-              style={{ width: `${cpuUserPct}%`, transition: "width 0.5s ease" }}
-            />
-            <div
-              className="bg-purple-500 h-2"
-              style={{ width: `${100 - cpuUserPct}%`, transition: "width 0.5s ease" }}
-            />
-          </div>
+          <Bar
+            value={cpuPct}
+            max={100}
+            color={cpuPct > 85 ? "bg-red-500" : cpuPct > 60 ? "bg-yellow-500" : "bg-blue-500"}
+          />
         </div>
 
-        {/* Uptime */}
-        <div className="flex justify-between">
-          <span className="text-gray-400">Uptime</span>
-          <span className="text-white">{formatUptime(metrics.uptime)}</span>
-        </div>
       </div>
     </div>
   )

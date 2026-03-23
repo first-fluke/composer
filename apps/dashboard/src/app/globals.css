@@ -1,1 +1,20 @@
 @import "tailwindcss";
+
+@keyframes stripe-slide {
+  from { background-position: 0 0; }
+  to { background-position: 16px 0; }
+}
+
+.bar-stripe {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255 255 255 / 0.12) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255 255 255 / 0.12) 50%,
+    rgba(255 255 255 / 0.12) 75%,
+    transparent 75%
+  );
+  background-size: 16px 16px;
+  animation: stripe-slide 0.6s linear infinite;
+}
