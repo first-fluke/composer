@@ -13,6 +13,9 @@ import { spawn } from "node:child_process"
 import type { AgentConfig } from "./agent-session"
 import { BaseSession, buildAgentEnv } from "./base-session"
 
+/** Keep only the tail of output to prevent heap exhaustion */
+const MAX_OUTPUT_BUFFER = 16_384
+
 export class ClaudeSession extends BaseSession {
   private output = ""
   private filesChanged: string[] = []
@@ -127,6 +130,9 @@ export class ClaudeSession extends BaseSession {
           for (const block of content) {
             if (block.type === "text" && typeof block.text === "string") {
               this.output += block.text
+              if (this.output.length > MAX_OUTPUT_BUFFER) {
+                this.output = this.output.slice(-MAX_OUTPUT_BUFFER)
+              }
               this.emit({ type: "output", chunk: block.text })
             }
             if (block.type === "tool_use") {
