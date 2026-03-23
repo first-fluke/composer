@@ -49,11 +49,10 @@ jobs:
     name: Test (Vitest)
     runs-on: ubuntu-latest
     needs: validate
-    env:
-      WORKSPACE_ROOT: ${{ runner.temp }}/workspaces
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: mkdir -p "$WORKSPACE_ROOT"
-      - run: bun run test
+      - run: mkdir -p "$WORKSPACE_ROOT" && bun run test
+        env:
+          WORKSPACE_ROOT: ${{ runner.temp }}/workspaces
