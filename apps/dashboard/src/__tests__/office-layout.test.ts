@@ -9,7 +9,7 @@ describe("Office Layout", () => {
   test("dimensions are consistent", () => {
     const layout = computeLayout(3)
     expect(layout.width).toBe(layout.cols * TILE_SIZE)
-    expect(layout.height).toBe(OFFICE_ROWS * TILE_SIZE)
+    expect(layout.height).toBe((OFFICE_ROWS + 2) * TILE_SIZE)
   })
 
   test("desk count matches requested slots", () => {
@@ -36,14 +36,14 @@ describe("Office Layout", () => {
     }
   })
 
-  test("furniture positions are within office bounds", () => {
+  test("furniture positions are within canvas bounds", () => {
     for (const count of [1, 3, 5]) {
       const layout = computeLayout(count)
       for (const item of layout.furniture) {
         expect(item.col).toBeGreaterThanOrEqual(0)
         expect(item.col).toBeLessThan(layout.cols)
         expect(item.row).toBeGreaterThanOrEqual(0)
-        expect(item.row).toBeLessThan(OFFICE_ROWS)
+        expect(item.row).toBeLessThan(OFFICE_ROWS + 2) // bathroom bump extends below
       }
     }
   })
