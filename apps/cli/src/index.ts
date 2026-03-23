@@ -139,18 +139,15 @@ program
     }
 
     const port = process.env.SERVER_PORT ?? "9741"
+    const dashboardCwd = resolve(ROOT, "apps/dashboard")
+    const supervisorScript = resolve(import.meta.dirname, "supervisor.ts")
 
-    // Start dashboard as detached background process
-    const dashProc = spawn("bun", ["run", "dev"], {
-      cwd: resolve(ROOT, "apps/dashboard"),
-      stdio: ["ignore", "pipe", "pipe"],
+    // Start supervisor as detached background process (handles auto-restart)
+    const dashProc = spawn("bun", [supervisorScript, dashboardCwd, port], {
+      cwd: ROOT,
+      stdio: "ignore",
       detached: true,
     })
-
-    // Pipe output to log file
-    const logStream = require("node:fs").createWriteStream(LOG_FILE, { flags: "a" })
-    dashProc.stdout?.pipe(logStream)
-    dashProc.stderr?.pipe(logStream)
     dashProc.unref()
 
     // Start ngrok

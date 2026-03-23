@@ -77,11 +77,6 @@ export abstract class BaseSession implements AgentSession {
 
   private listeners = new Map<string, Set<AgentEventHandler<unknown>>>()
 
-  // ── Abstract methods (each session must implement) ────────────────────────
-
-  abstract start(config: AgentConfig): Promise<void>
-  abstract execute(prompt: string): Promise<void>
-
   // ── Pre-start guard ─────────────────────────────────────────────────────
 
   protected assertStarted(): boolean {

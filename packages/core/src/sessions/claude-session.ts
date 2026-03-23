@@ -13,11 +13,7 @@ import { spawn } from "node:child_process"
 import type { AgentConfig } from "./agent-session"
 import { BaseSession, buildAgentEnv } from "./base-session"
 
-/** Keep only the tail of output to prevent heap exhaustion */
-const MAX_OUTPUT_BUFFER = 16_384
-
 export class ClaudeSession extends BaseSession {
-  private output = ""
   private filesChanged: string[] = []
   private started = false
 
@@ -32,7 +28,6 @@ export class ClaudeSession extends BaseSession {
       return
     }
 
-    this.output = ""
     this.filesChanged = []
     this.startedAt = Date.now()
 
@@ -108,7 +103,6 @@ export class ClaudeSession extends BaseSession {
       proc.once("close", (code) => {
         const exitCode = code ?? -1
 
-        // If we haven't emitted a complete event from the "result" message, emit now
         if (exitCode !== 0) {
           this.emitError(exitCode === -1 ? "TIMEOUT" : "CRASH", `claude exited with code ${exitCode}`, exitCode !== 1)
         }
@@ -129,10 +123,7 @@ export class ClaudeSession extends BaseSession {
         if (Array.isArray(content)) {
           for (const block of content) {
             if (block.type === "text" && typeof block.text === "string") {
-              this.output += block.text
-              if (this.output.length > MAX_OUTPUT_BUFFER) {
-                this.output = this.output.slice(-MAX_OUTPUT_BUFFER)
-              }
+              // Stream-only — no accumulation, prevents OOM
               this.emit({ type: "output", chunk: block.text })
             }
             if (block.type === "tool_use") {
@@ -155,7 +146,6 @@ export class ClaudeSession extends BaseSession {
           }
         }
 
-        // Token usage from message
         const usage = msg?.usage as Record<string, unknown> | undefined
         if (usage) {
           this.emit({ type: "heartbeat", timestamp: new Date().toISOString() })
@@ -164,7 +154,7 @@ export class ClaudeSession extends BaseSession {
       }
 
       case "result": {
-        const result = (e.result as string | undefined) ?? this.output
+        const result = (e.result as string | undefined) ?? ""
         const durationMs = (e.duration_ms as number | undefined) ?? this.elapsedMs()
         const isError = e.is_error === true
 
@@ -175,7 +165,7 @@ export class ClaudeSession extends BaseSession {
             type: "complete",
             result: {
               exitCode: 0,
-              output: result.length > 10240 ? result.slice(0, 10240) : result,
+              output: result.length > 10240 ? result.slice(-10240) : result,
               durationMs,
               filesChanged: this.filesChanged,
               tokenUsage: this.extractTokenUsage(e),

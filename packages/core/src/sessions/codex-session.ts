@@ -28,7 +28,6 @@ interface JsonRpcResponse {
 export class CodexSession extends BaseSession {
   private rpcId = 0
   private threadId: string | null = null
-  private output = ""
   private filesChanged: string[] = []
   private pendingResolvers = new Map<
     number,
@@ -63,7 +62,6 @@ export class CodexSession extends BaseSession {
   async execute(prompt: string): Promise<void> {
     if (!this.assertStarted()) return
 
-    this.output = ""
     this.filesChanged = []
 
     const threadResult = (await this.rpc("thread/start", {
@@ -136,7 +134,6 @@ export class CodexSession extends BaseSession {
           const msg: JsonRpcResponse = JSON.parse(line)
           this.handleMessage(msg)
         } catch {
-          this.output += `${line}\n`
           this.emit({ type: "output", chunk: line })
         }
       }
@@ -165,7 +162,6 @@ export class CodexSession extends BaseSession {
     switch (msg.method) {
       case "item/agentMessage/delta": {
         const chunk = (msg.params?.delta as string | undefined) ?? ""
-        this.output += chunk
         this.emit({ type: "output", chunk })
         break
       }
@@ -188,7 +184,7 @@ export class CodexSession extends BaseSession {
       }
 
       case "turn/completed": {
-        const result = this.buildRunResult(this.output, this.filesChanged)
+        const result = this.buildRunResult("", this.filesChanged)
         result.exitCode = 0
         this.emit({ type: "complete", result })
         break
