@@ -40,6 +40,9 @@ export class AgentCharacter {
 
   // Interest point filter (for semaphore-like bathroom access)
   isInterestPointAvailable: ((col: number, row: number) => boolean) | null = null
+  // Waypoint: returns an intermediate point to walk to before the final target
+  getWaypoint: ((col: number, row: number) => { col: number; row: number } | null) | null = null
+  private pendingFinalTarget: { x: number; y: number } | null = null
 
   constructor(
     agentType: AgentType,
@@ -140,6 +143,17 @@ export class AgentCharacter {
       if (this.isNear(this.targetX, this.targetY)) {
         this.container.x = this.targetX
         this.container.y = this.targetY
+
+        // If waypoint reached, continue to final target
+        if (this.pendingFinalTarget) {
+          this.targetX = this.pendingFinalTarget.x
+          this.targetY = this.pendingFinalTarget.y
+          this.pendingFinalTarget = null
+          this.frame = 0
+          this.elapsed = 0
+          return
+        }
+
         this.isMoving = false
         this.pauseRemaining = MIN_PAUSE + Math.random() * (MAX_PAUSE - MIN_PAUSE)
         this.frame = 0
@@ -196,8 +210,21 @@ export class AgentCharacter {
       tile = this.walkableTiles[Math.floor(Math.random() * this.walkableTiles.length)]
     }
 
-    this.targetX = tile.col * TILE_SIZE
-    this.targetY = tile.row * TILE_SIZE
+    const finalX = tile.col * TILE_SIZE
+    const finalY = tile.row * TILE_SIZE
+
+    // Check if this target needs a waypoint (e.g. bathroom behind a wall)
+    const waypoint = this.getWaypoint?.(tile.col, tile.row)
+    if (waypoint) {
+      this.targetX = waypoint.col * TILE_SIZE
+      this.targetY = waypoint.row * TILE_SIZE
+      this.pendingFinalTarget = { x: finalX, y: finalY }
+    } else {
+      this.targetX = finalX
+      this.targetY = finalY
+      this.pendingFinalTarget = null
+    }
+
     this.isMoving = true
     this.atHome = false
     this.frame = 0

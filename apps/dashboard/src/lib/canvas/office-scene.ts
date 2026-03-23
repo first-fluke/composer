@@ -256,6 +256,13 @@ export class OfficeScene {
         }
         return true
       }
+      // Waypoint: walk to tile above bathroom door first, then down through door
+      character.getWaypoint = (col, row) => {
+        if (col === this.bathroomCol && row === this.bathroomRow) {
+          return { col: this.bathroomCol, row: this.bathroomRow - 1 }
+        }
+        return null
+      }
       character.setPosition(desk.col * TILE_SIZE, (desk.row + 1) * TILE_SIZE)
       this.characterLayer.addChild(character.container)
       this.characters.set(i, character)
