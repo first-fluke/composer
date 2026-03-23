@@ -13,6 +13,14 @@ export async function bootstrap() {
   // CWD is apps/dashboard/ — move to project root so Orchestrator finds WORKFLOW.md
   process.chdir(path.resolve(process.cwd(), "../.."))
 
+  // Prevent orchestrator errors from crashing the Next.js process
+  process.on("uncaughtException", (err) => {
+    logger.error("process", `Uncaught exception (non-fatal): ${err.message}`, { stack: err.stack })
+  })
+  process.on("unhandledRejection", (reason) => {
+    logger.error("process", `Unhandled rejection (non-fatal): ${reason}`)
+  })
+
   const config = toOrchestratorConfig()
   configureLogger(config.logLevel, config.logFormat)
 

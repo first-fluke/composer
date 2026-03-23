@@ -62,12 +62,21 @@ program
     // Start Next.js dashboard (includes orchestrator via instrumentation.ts)
     let dashProc: ChildProcess | null = null
 
+    let shuttingDown = false
+
     const startDashboard = () => {
       dashProc = spawn("bun", ["run", "dev"], {
         cwd: resolve(ROOT, "apps/dashboard"),
         stdio: "inherit",
       })
       console.log(pc.green(`▶ Dashboard started (pid: ${dashProc.pid}) → http://localhost:${port}`))
+
+      // Auto-restart on crash (unless shutting down intentionally)
+      dashProc.on("exit", (code) => {
+        if (shuttingDown) return
+        console.log(pc.red(`✗ Dashboard exited with code ${code}. Restarting in 3s...`))
+        setTimeout(startDashboard, 3_000)
+      })
     }
 
     startDashboard()
@@ -120,14 +129,17 @@ program
 
     watcher.on("change", (path: string) => {
       console.log(pc.dim(`  changed: ${path}`))
+      shuttingDown = true // prevent auto-restart loop during intentional restart
       if (dashProc) {
         dashProc.kill()
         console.log(pc.yellow("↻ Restarting dashboard..."))
       }
+      shuttingDown = false
       startDashboard()
     })
 
     const shutdown = () => {
+      shuttingDown = true
       watcher.close()
       dashProc?.kill()
       ngrokProc?.kill()
