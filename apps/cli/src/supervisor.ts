@@ -6,7 +6,7 @@
  */
 
 import { spawn } from "node:child_process"
-import { appendFileSync, existsSync } from "node:fs"
+import { appendFileSync, existsSync, rmSync, symlinkSync } from "node:fs"
 import { resolve } from "node:path"
 
 const dashboardCwd = process.argv[2]
@@ -29,10 +29,30 @@ function startDashboard(): void {
 
   // Production: run standalone server.js directly (no node_modules needed)
   // Monorepo standalone output mirrors the workspace structure
-  const standaloneServer = resolve(dashboardCwd, ".next/standalone/apps/dashboard/server.js")
+  const standaloneDir = resolve(dashboardCwd, ".next/standalone/apps/dashboard")
+  const standaloneServer = resolve(standaloneDir, "server.js")
   if (mode === "start" && existsSync(standaloneServer)) {
+    // Standalone requires static + public to be copied/linked alongside server.js
+    const staticLink = resolve(standaloneDir, ".next/static")
+    const publicLink = resolve(standaloneDir, "public")
+    const staticSrc = resolve(dashboardCwd, ".next/static")
+    const publicSrc = resolve(dashboardCwd, "public")
+
+    try {
+      rmSync(staticLink, { recursive: true, force: true })
+    } catch {
+      /* ignore */
+    }
+    try {
+      rmSync(publicLink, { recursive: true, force: true })
+    } catch {
+      /* ignore */
+    }
+    if (existsSync(staticSrc)) symlinkSync(staticSrc, staticLink)
+    if (existsSync(publicSrc)) symlinkSync(publicSrc, publicLink)
+
     proc = spawn("node", [standaloneServer], {
-      cwd: dashboardCwd,
+      cwd: standaloneDir,
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env, PORT: port, HOSTNAME: "0.0.0.0" },
     })
