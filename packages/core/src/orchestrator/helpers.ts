@@ -52,6 +52,12 @@ let cachedMetrics: {
 let metricsTimestamp = 0
 const METRICS_TTL_MS = 5000
 
+/** @internal test-only — resets the metrics cache */
+export function _resetMetricsCache() {
+  cachedMetrics = null
+  metricsTimestamp = 0
+}
+
 function getSystemMetrics() {
   const now = Date.now()
   if (cachedMetrics && now - metricsTimestamp < METRICS_TTL_MS) {
