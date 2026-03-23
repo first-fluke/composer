@@ -4,20 +4,98 @@
  * CLI entry point — `bun av`
  *
  * Commands:
- *   (default)  Check config, then start dashboard
- *   setup      Interactive setup wizard
- *   dev        Dashboard + orchestrator + ngrok tunnel
- *   status     Query running server status
+ *   up       Start dashboard + ngrok as background daemon
+ *   down     Stop background daemon
+ *   dev      Start in foreground (with file watching + auto-restart)
+ *   status   Query orchestrator status
+ *   issue    Create a Linear issue
+ *   setup    Interactive setup wizard
  */
 
 import { type ChildProcess, spawn, spawnSync } from "node:child_process"
-import { existsSync } from "node:fs"
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { program } from "commander"
 import pc from "picocolors"
 
 /** Project root = cwd where user runs `bunx av` */
 const ROOT = process.cwd()
+const PID_FILE = resolve(ROOT, ".av.pid")
+const LOG_FILE = resolve(ROOT, ".av.log")
+
+// ── PID file helpers ─────────────────────────────────────────────────────────
+
+interface PidState {
+  dashboard: number
+  ngrok?: number
+  port: number
+  startedAt: string
+}
+
+function writePids(state: PidState): void {
+  writeFileSync(PID_FILE, JSON.stringify(state, null, 2))
+}
+
+function readPids(): PidState | null {
+  if (!existsSync(PID_FILE)) return null
+  try {
+    return JSON.parse(readFileSync(PID_FILE, "utf-8"))
+  } catch {
+    return null
+  }
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function ensureEnv(): void {
+  if (!existsSync(resolve(ROOT, ".env"))) {
+    console.log(pc.red("No .env found. Run `av setup` first."))
+    process.exit(1)
+  }
+}
+
+// ── ngrok helper ─────────────────────────────────────────────────────────────
+
+function spawnNgrok(port: string): ChildProcess | null {
+  const which = spawnSync("which", ["ngrok"])
+  if (which.status !== 0) {
+    console.log(pc.yellow("⚠ ngrok not found — Linear webhooks won't reach localhost"))
+    console.log(pc.dim("  Install: brew install ngrok"))
+    return null
+  }
+
+  const proc = spawn("ngrok", ["http", port, "--log", "stdout", "--log-format", "json"], {
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: true,
+  })
+
+  let found = false
+  proc.stdout?.on("data", (chunk: Buffer) => {
+    if (found) return
+    for (const line of chunk.toString().split("\n")) {
+      if (!line.trim()) continue
+      try {
+        const log = JSON.parse(line)
+        if (log.url?.startsWith("https://")) {
+          found = true
+          console.log(pc.green(`▶ ngrok → ${log.url}`))
+          console.log(pc.dim(`  Webhook URL: ${log.url}/api/webhook`))
+        }
+      } catch {
+        // not JSON
+      }
+    }
+  })
+
+  return proc
+}
 
 program.name("av").description("Agent Valley — AI agent orchestrator").version("0.1.0")
 
@@ -45,23 +123,108 @@ program
     await invite()
   })
 
-// ── dev ──────────────────────────────────────────────────────────────────────
+// ── up ───────────────────────────────────────────────────────────────────────
 program
-  .command("dev")
-  .description("Start dashboard + orchestrator + ngrok tunnel")
+  .command("up")
+  .description("Start dashboard + orchestrator + ngrok (background daemon)")
   .action(async () => {
-    if (!existsSync(resolve(ROOT, ".env"))) {
-      console.log(pc.yellow("No .env found. Running setup first...\n"))
-      const { setup } = await import("./setup")
-      await setup()
-      console.log()
+    ensureEnv()
+
+    // Check if already running
+    const existing = readPids()
+    if (existing && isProcessAlive(existing.dashboard)) {
+      console.log(pc.yellow(`Already running (dashboard pid: ${existing.dashboard}, port: ${existing.port})`))
+      console.log(pc.dim(`  Stop with: av down`))
+      return
     }
 
     const port = process.env.SERVER_PORT ?? "9741"
 
-    // Start Next.js dashboard (includes orchestrator via instrumentation.ts)
-    let dashProc: ChildProcess | null = null
+    // Start dashboard as detached background process
+    const dashProc = spawn("bun", ["run", "dev"], {
+      cwd: resolve(ROOT, "apps/dashboard"),
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: true,
+    })
 
+    // Pipe output to log file
+    const logStream = require("node:fs").createWriteStream(LOG_FILE, { flags: "a" })
+    dashProc.stdout?.pipe(logStream)
+    dashProc.stderr?.pipe(logStream)
+    dashProc.unref()
+
+    // Start ngrok
+    const ngrokProc = spawnNgrok(port)
+    ngrokProc?.unref()
+
+    // Write PID file
+    writePids({
+      dashboard: dashProc.pid ?? 0,
+      ngrok: ngrokProc?.pid,
+      port: Number(port),
+      startedAt: new Date().toISOString(),
+    })
+
+    console.log(pc.green(`▶ Dashboard started (pid: ${dashProc.pid}) → http://localhost:${port}`))
+    console.log(pc.dim(`  Logs: tail -f ${LOG_FILE}`))
+    console.log(pc.dim(`  Stop: av down`))
+
+    // Wait a moment for ngrok URL detection, then exit
+    await new Promise((r) => setTimeout(r, 5_000))
+  })
+
+// ── down ─────────────────────────────────────────────────────────────────────
+program
+  .command("down")
+  .description("Stop background dashboard + ngrok")
+  .action(() => {
+    const state = readPids()
+    if (!state) {
+      console.log(pc.yellow("Not running (no .av.pid found)"))
+      return
+    }
+
+    let stopped = 0
+
+    if (isProcessAlive(state.dashboard)) {
+      // Kill process group (dashboard + its children)
+      try {
+        process.kill(-state.dashboard, "SIGTERM")
+      } catch {
+        process.kill(state.dashboard, "SIGTERM")
+      }
+      console.log(pc.green(`▪ Dashboard stopped (pid: ${state.dashboard})`))
+      stopped++
+    }
+
+    if (state.ngrok && isProcessAlive(state.ngrok)) {
+      try {
+        process.kill(-state.ngrok, "SIGTERM")
+      } catch {
+        process.kill(state.ngrok, "SIGTERM")
+      }
+      console.log(pc.green(`▪ ngrok stopped (pid: ${state.ngrok})`))
+      stopped++
+    }
+
+    unlinkSync(PID_FILE)
+
+    if (stopped === 0) {
+      console.log(pc.yellow("Processes were already dead. Cleaned up PID file."))
+    } else {
+      console.log(pc.green(`✓ Stopped ${stopped} process(es)`))
+    }
+  })
+
+// ── dev (foreground) ─────────────────────────────────────────────────────────
+program
+  .command("dev")
+  .description("Start in foreground (with file watching + auto-restart)")
+  .action(async () => {
+    ensureEnv()
+
+    const port = process.env.SERVER_PORT ?? "9741"
+    let dashProc: ChildProcess | null = null
     let shuttingDown = false
 
     const startDashboard = () => {
@@ -71,57 +234,19 @@ program
       })
       console.log(pc.green(`▶ Dashboard started (pid: ${dashProc.pid}) → http://localhost:${port}`))
 
-      // Auto-restart on crash (unless shutting down intentionally)
       dashProc.on("exit", (code) => {
         if (shuttingDown) return
-        console.log(pc.red(`✗ Dashboard exited with code ${code}. Restarting in 3s...`))
+        console.log(pc.red(`✗ Dashboard exited (code ${code}). Restarting in 3s...`))
         setTimeout(startDashboard, 3_000)
       })
     }
 
     startDashboard()
 
-    // Start ngrok tunnel for Linear webhooks
-    let ngrokProc: ChildProcess | null = null
-    let ngrokUrl: string | null = null
+    // ngrok
+    const ngrokProc = spawnNgrok(port)
 
-    const startNgrok = () => {
-      const which = spawnSync("which", ["ngrok"])
-      if (which.status !== 0) {
-        console.log(pc.yellow("⚠ ngrok not found — Linear webhooks won't reach localhost"))
-        console.log(pc.dim("  Install: brew install ngrok"))
-        return
-      }
-
-      ngrokProc = spawn("ngrok", ["http", port, "--log", "stdout", "--log-format", "json"], {
-        stdio: ["ignore", "pipe", "pipe"],
-      })
-
-      const timeout = setTimeout(() => {
-        if (!ngrokUrl) console.log(pc.yellow("⚠ ngrok started but URL detection timed out — check ngrok dashboard"))
-      }, 10_000)
-
-      ngrokProc.stdout?.on("data", (chunk: Buffer) => {
-        for (const line of chunk.toString().split("\n")) {
-          if (!line.trim()) continue
-          try {
-            const log = JSON.parse(line)
-            if (log.url?.startsWith("https://")) {
-              ngrokUrl = log.url
-              clearTimeout(timeout)
-              console.log(pc.green(`▶ ngrok tunnel → ${ngrokUrl}`))
-              console.log(pc.dim(`  Set Linear webhook URL to: ${ngrokUrl}/api/webhook`))
-            }
-          } catch {
-            // not JSON, skip
-          }
-        }
-      })
-    }
-
-    startNgrok()
-
-    // Watch config files for restart
+    // Watch config files
     const chokidar = await import("chokidar")
     const watcher = chokidar.watch([resolve(ROOT, "WORKFLOW.md"), resolve(ROOT, ".env")], {
       ignoreInitial: true,
@@ -129,11 +254,9 @@ program
 
     watcher.on("change", (path: string) => {
       console.log(pc.dim(`  changed: ${path}`))
-      shuttingDown = true // prevent auto-restart loop during intentional restart
-      if (dashProc) {
-        dashProc.kill()
-        console.log(pc.yellow("↻ Restarting dashboard..."))
-      }
+      shuttingDown = true
+      dashProc?.kill()
+      console.log(pc.yellow("↻ Restarting dashboard..."))
       shuttingDown = false
       startDashboard()
     })
@@ -181,12 +304,24 @@ program
   .description("Show orchestrator status")
   .action(async () => {
     const port = process.env.SERVER_PORT ?? "9741"
+    const pids = readPids()
+
+    // Daemon status
+    if (pids) {
+      const dashAlive = isProcessAlive(pids.dashboard)
+      const ngrokAlive = pids.ngrok ? isProcessAlive(pids.ngrok) : false
+      console.log(dashAlive ? pc.green(`● Dashboard running (pid: ${pids.dashboard})`) : pc.red("○ Dashboard dead"))
+      console.log(ngrokAlive ? pc.green(`● ngrok running (pid: ${pids.ngrok})`) : pc.dim("○ ngrok not running"))
+      console.log()
+    }
+
+    // Orchestrator status
     try {
       const res = await fetch(`http://localhost:${port}/api/status`)
       const data = await res.json()
       console.log(JSON.stringify(data, null, 2))
     } catch {
-      console.log(pc.red(`Server is not running on port ${port}`))
+      console.log(pc.red(`Server is not responding on port ${port}`))
     }
   })
 
@@ -208,19 +343,9 @@ program
     await logout()
   })
 
-// ── default: start dashboard ─────────────────────────────────────────────────
-program.action(async () => {
-  if (!existsSync(".env")) {
-    const { setup } = await import("./setup")
-    await setup()
-    console.log()
-  }
-
-  const proc = spawn("bun", ["run", "dev"], {
-    cwd: "apps/dashboard",
-    stdio: "inherit",
-  })
-  proc.on("exit", (code) => process.exit(code ?? 0))
+// ── default: show help ───────────────────────────────────────────────────────
+program.action(() => {
+  program.help()
 })
 
 program.parse()

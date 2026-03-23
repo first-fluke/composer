@@ -42,3 +42,7 @@ docs/plans/
 .serena/
 .superset/
 .omc/
+
+# av daemon
+.av.pid
+.av.log
