@@ -21,6 +21,7 @@ export interface OfficeLayout {
   furniture: FurniturePosition[]
   walkableTiles: { col: number; row: number }[]
   interestPoints: { col: number; row: number }[]
+  coffeePoints: { col: number; row: number }[]
 }
 
 export function computeLayout(slotCount: number): OfficeLayout {
@@ -35,6 +36,7 @@ export function computeLayout(slotCount: number): OfficeLayout {
 
   const furniture: FurniturePosition[] = []
   const interestPoints: { col: number; row: number }[] = []
+  const coffeePoints: { col: number; row: number }[] = []
 
   // Gym — bottom-left
   const gymCol = 2
@@ -53,10 +55,30 @@ export function computeLayout(slotCount: number): OfficeLayout {
   furniture.push({ col: bathCol + 1, row: OFFICE_ROWS + 1, type: "wall" }) // bottom-right
   interestPoints.push({ col: bathCol, row: OFFICE_ROWS - 1 })              // inside bathroom (door tile)
 
+  // Fill extra rows with wall (hide background, except bathroom bump)
+  const bathBumpSet = new Set([
+    `${bathCol - 1},${OFFICE_ROWS}`, `${bathCol},${OFFICE_ROWS}`, `${bathCol + 1},${OFFICE_ROWS}`,
+    `${bathCol - 1},${OFFICE_ROWS + 1}`, `${bathCol},${OFFICE_ROWS + 1}`, `${bathCol + 1},${OFFICE_ROWS + 1}`,
+  ])
+  for (let row = OFFICE_ROWS; row < OFFICE_ROWS + 2; row++) {
+    for (let col = 0; col < cols; col++) {
+      if (!bathBumpSet.has(`${col},${row}`)) {
+        furniture.push({ col, row, type: "wall" })
+      }
+    }
+  }
+
   // Coffee machine — top-left
   const coffeeCol = 2
   furniture.push({ col: coffeeCol, row: 1, type: "coffee_machine" })
   interestPoints.push({ col: coffeeCol, row: 2 })
+  coffeePoints.push({ col: coffeeCol, row: 2 })
+
+  // Coffee machine — top-right
+  const coffeeCol2 = cols - 3
+  furniture.push({ col: coffeeCol2, row: 1, type: "coffee_machine" })
+  interestPoints.push({ col: coffeeCol2, row: 2 })
+  coffeePoints.push({ col: coffeeCol2, row: 2 })
 
   // Top wall decorations
   const topSlots = Math.max(1, Math.floor((cols - 8) / 6))
@@ -106,5 +128,6 @@ export function computeLayout(slotCount: number): OfficeLayout {
     furniture,
     walkableTiles,
     interestPoints,
+    coffeePoints,
   }
 }

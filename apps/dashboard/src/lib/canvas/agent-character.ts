@@ -1,5 +1,5 @@
 import { Container, Sprite, type Ticker } from "pixi.js"
-import { getAgentTexture } from "@/lib/canvas/sprite-generator"
+import { getAgentTexture, getCoffeeCupTexture } from "@/lib/canvas/sprite-generator"
 import { STATE_ANIMATION_MAP } from "@/features/office/utils/animations"
 import { TILE_SIZE } from "@/features/office/utils/office-layout"
 import type { AgentType, CharacterSkin, WorkspaceStatus } from "@/features/office/types/agent"
@@ -10,6 +10,7 @@ const WALK_FRAME_INTERVAL = 200
 const MIN_PAUSE = 2000
 const MAX_PAUSE = 5000
 const INTEREST_POINT_CHANCE = 0.35
+const COFFEE_DRINK_DURATION = 6000
 
 export class AgentCharacter {
   readonly container: Container
@@ -38,10 +39,19 @@ export class AgentCharacter {
   private cleanupTimer = 0
   onCleanupDone: ((x: number, y: number) => void) | null = null
 
+  // Coffee state
+  private coffeeSprite: Sprite | null = null
+  private coffeeTimer = 0
+  private coffeeFrame = 0
+  private coffeeElapsed = 0
+  private coffeePointSet = new Set<string>()
+
   // Interest point filter (for semaphore-like bathroom access)
   isInterestPointAvailable: ((col: number, row: number) => boolean) | null = null
   // Waypoint: returns an intermediate point to walk to before the final target
   getWaypoint: ((col: number, row: number) => { col: number; row: number } | null) | null = null
+  // Exit waypoint: returns a point to walk to first when LEAVING a special area
+  getExitWaypoint: ((fromX: number, fromY: number) => { col: number; row: number } | null) | null = null
   private pendingFinalTarget: { x: number; y: number } | null = null
 
   constructor(
@@ -69,6 +79,7 @@ export class AgentCharacter {
 
   private animate(ticker: Ticker) {
     const dt = ticker.deltaMS
+    this.updateCoffee(dt)
 
     if (this.status === "idle") {
       this.updateIdle(dt)
@@ -159,6 +170,10 @@ export class AgentCharacter {
         this.frame = 0
         this.elapsed = 0
         this.updateSprite()
+
+        if (this.isCoffeePoint(this.targetX, this.targetY)) {
+          this.pickUpCoffee()
+        }
       }
     } else {
       this.pauseRemaining -= dt
@@ -213,16 +228,24 @@ export class AgentCharacter {
     const finalX = tile.col * TILE_SIZE
     const finalY = tile.row * TILE_SIZE
 
-    // Check if this target needs a waypoint (e.g. bathroom behind a wall)
-    const waypoint = this.getWaypoint?.(tile.col, tile.row)
-    if (waypoint) {
-      this.targetX = waypoint.col * TILE_SIZE
-      this.targetY = waypoint.row * TILE_SIZE
+    // Check if leaving a special area (e.g. exiting bathroom)
+    const exitWp = this.getExitWaypoint?.(this.container.x, this.container.y)
+    if (exitWp) {
+      this.targetX = exitWp.col * TILE_SIZE
+      this.targetY = exitWp.row * TILE_SIZE
       this.pendingFinalTarget = { x: finalX, y: finalY }
+    // Check if entering a special area (e.g. entering bathroom)
     } else {
-      this.targetX = finalX
-      this.targetY = finalY
-      this.pendingFinalTarget = null
+      const entryWp = this.getWaypoint?.(tile.col, tile.row)
+      if (entryWp) {
+        this.targetX = entryWp.col * TILE_SIZE
+        this.targetY = entryWp.row * TILE_SIZE
+        this.pendingFinalTarget = { x: finalX, y: finalY }
+      } else {
+        this.targetX = finalX
+        this.targetY = finalY
+        this.pendingFinalTarget = null
+      }
     }
 
     this.isMoving = true
@@ -281,6 +304,44 @@ export class AgentCharacter {
 
   get currentStatus(): WorkspaceStatus {
     return this.status
+  }
+
+  setCoffeePoints(points: { col: number; row: number }[]) {
+    this.coffeePointSet = new Set(points.map((p) => `${p.col},${p.row}`))
+  }
+
+  private isCoffeePoint(x: number, y: number): boolean {
+    const col = Math.round(x / TILE_SIZE)
+    const row = Math.round(y / TILE_SIZE)
+    return this.coffeePointSet.has(`${col},${row}`)
+  }
+
+  private pickUpCoffee() {
+    if (this.coffeeSprite) return
+    this.coffeeFrame = 0
+    this.coffeeElapsed = 0
+    this.coffeeTimer = COFFEE_DRINK_DURATION
+    this.coffeeSprite = new Sprite(getCoffeeCupTexture(0))
+    this.coffeeSprite.x = 20
+    this.coffeeSprite.y = 14
+    this.container.addChild(this.coffeeSprite)
+  }
+
+  private updateCoffee(dt: number) {
+    if (!this.coffeeSprite) return
+    this.coffeeTimer -= dt
+    if (this.coffeeTimer <= 0) {
+      this.container.removeChild(this.coffeeSprite)
+      this.coffeeSprite.destroy()
+      this.coffeeSprite = null
+      return
+    }
+    this.coffeeElapsed += dt
+    if (this.coffeeElapsed >= 400) {
+      this.coffeeElapsed = 0
+      this.coffeeFrame = (this.coffeeFrame + 1) % 3
+      this.coffeeSprite.texture = getCoffeeCupTexture(this.coffeeFrame)
+    }
   }
 
   setPosition(x: number, y: number) {

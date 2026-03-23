@@ -226,7 +226,7 @@ export class OfficeScene {
   }
 
   private createCharacters() {
-    const { desks, walkableTiles, interestPoints, cols } = this.layout!
+    const { desks, walkableTiles, interestPoints, coffeePoints, cols } = this.layout!
     const skins = pickRandomSkins(desks.length)
 
     // Bathroom semaphore — locate the bathroom interest point
@@ -256,13 +256,23 @@ export class OfficeScene {
         }
         return true
       }
-      // Waypoint: walk to tile above bathroom door first, then down through door
+      // Entry waypoint: walk to tile above bathroom door first, then down
       character.getWaypoint = (col, row) => {
         if (col === this.bathroomCol && row === this.bathroomRow) {
           return { col: this.bathroomCol, row: this.bathroomRow - 1 }
         }
         return null
       }
+      // Exit waypoint: walk up through door first, then to office target
+      character.getExitWaypoint = (fromX, fromY) => {
+        const bathX = this.bathroomCol * TILE_SIZE
+        const bathY = this.bathroomRow * TILE_SIZE
+        if (Math.abs(fromX - bathX) < TILE_SIZE && Math.abs(fromY - bathY) < TILE_SIZE) {
+          return { col: this.bathroomCol, row: this.bathroomRow - 1 }
+        }
+        return null
+      }
+      character.setCoffeePoints(coffeePoints)
       character.setPosition(desk.col * TILE_SIZE, (desk.row + 1) * TILE_SIZE)
       this.characterLayer.addChild(character.container)
       this.characters.set(i, character)

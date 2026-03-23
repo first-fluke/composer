@@ -695,4 +695,61 @@ export function getCockatooTexture(frame: number, isFlying: boolean): Texture {
   return texture
 }
 
-export { SPRITE_SIZE, PUPPY_SIZE, POOP_SIZE, COCKATOO_SIZE }
+// ── Coffee cup sprite ──
+
+const COFFEE_CUP_SIZE = 12
+
+function createCoffeeCupCanvas(): OffscreenCanvas {
+  return new OffscreenCanvas(COFFEE_CUP_SIZE, COFFEE_CUP_SIZE)
+}
+
+function drawCoffeeCup(ctx: OffscreenCanvasRenderingContext2D, frame: number) {
+  // Cup body — white
+  ctx.fillStyle = "#FFFFFF"
+  ctx.fillRect(2, 3, 6, 7)
+
+  // Cup rim
+  ctx.fillStyle = "#DDDDDD"
+  ctx.fillRect(1, 3, 8, 1)
+
+  // Handle
+  ctx.fillStyle = "#DDDDDD"
+  ctx.fillRect(8, 4, 2, 1)
+  ctx.fillRect(9, 5, 1, 2)
+  ctx.fillRect(8, 7, 2, 1)
+
+  // Coffee inside — dark brown
+  ctx.fillStyle = "#4A2800"
+  ctx.fillRect(3, 4, 4, 3)
+
+  // Steam — animated
+  ctx.fillStyle = "rgba(200,200,200,0.6)"
+  if (frame % 3 === 0) {
+    ctx.fillRect(3, 1, 1, 2)
+    ctx.fillRect(6, 0, 1, 2)
+  } else if (frame % 3 === 1) {
+    ctx.fillRect(3, 0, 1, 2)
+    ctx.fillRect(6, 1, 1, 2)
+  } else {
+    ctx.fillRect(4, 0, 1, 2)
+    ctx.fillRect(5, 1, 1, 2)
+  }
+}
+
+const coffeeCupTextureCache = new Map<string, Texture>()
+
+export function getCoffeeCupTexture(frame: number): Texture {
+  const key = `coffee-cup-${frame}`
+  let texture = coffeeCupTextureCache.get(key)
+  if (!texture) {
+    const canvas = createCoffeeCupCanvas()
+    const ctx = canvas.getContext("2d")!
+    ctx.clearRect(0, 0, COFFEE_CUP_SIZE, COFFEE_CUP_SIZE)
+    drawCoffeeCup(ctx, frame)
+    texture = Texture.from(canvas)
+    coffeeCupTextureCache.set(key, texture)
+  }
+  return texture
+}
+
+export { SPRITE_SIZE, PUPPY_SIZE, POOP_SIZE, COCKATOO_SIZE, COFFEE_CUP_SIZE }
