@@ -28,6 +28,8 @@ export async function GET() {
       if (orchestrator) {
         send("state", orchestrator.getStatus())
       } else {
+        const mem = process.memoryUsage()
+        const cpu = process.cpuUsage()
         send("state", {
           isRunning: false,
           lastEventAt: null,
@@ -35,6 +37,14 @@ export async function GET() {
           activeAgents: 0,
           retryQueueSize: 0,
           config: { agentType: env.AGENT_TYPE, maxParallel: env.MAX_PARALLEL, serverPort: env.SERVER_PORT },
+          systemMetrics: {
+            memoryRss: mem.rss,
+            memoryHeapUsed: mem.heapUsed,
+            memoryHeapTotal: mem.heapTotal,
+            cpuUser: cpu.user,
+            cpuSystem: cpu.system,
+            uptime: process.uptime(),
+          },
         })
       }
 

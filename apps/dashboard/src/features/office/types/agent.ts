@@ -8,6 +8,15 @@ export interface ActiveWorkspace {
   lastOutput?: string
 }
 
+export interface SystemMetrics {
+  memoryRss: number
+  memoryHeapUsed: number
+  memoryHeapTotal: number
+  cpuUser: number
+  cpuSystem: number
+  uptime: number
+}
+
 export interface OrchestratorState {
   isRunning: boolean
   lastEventAt: string | null
@@ -19,6 +28,7 @@ export interface OrchestratorState {
     maxParallel: number
     serverPort: number
   }
+  systemMetrics?: SystemMetrics
 }
 
 export type AgentType = "claude" | "codex" | "gemini"

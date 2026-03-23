@@ -58,6 +58,9 @@ export function buildOrchestratorStatus(
     }
   })
 
+  const mem = process.memoryUsage()
+  const cpu = process.cpuUsage()
+
   return {
     isRunning: state.isRunning,
     lastEventAt: state.lastEventAt,
@@ -69,6 +72,14 @@ export function buildOrchestratorStatus(
       agentType: config.agentType,
       maxParallel: config.maxParallel,
       serverPort: config.serverPort,
+    },
+    systemMetrics: {
+      memoryRss: mem.rss,
+      memoryHeapUsed: mem.heapUsed,
+      memoryHeapTotal: mem.heapTotal,
+      cpuUser: cpu.user,
+      cpuSystem: cpu.system,
+      uptime: process.uptime(),
     },
   }
 }

@@ -7,6 +7,7 @@ import {
 } from "@/features/office/utils/office-layout"
 import { getFurnitureTexture } from "@/lib/canvas/sprite-generator"
 import { AgentCharacter } from "@/lib/canvas/agent-character"
+import { OfficePuppy } from "@/lib/canvas/office-puppy"
 import { IssueBubble } from "@/lib/canvas/issue-bubble"
 import { CHARACTER_SKINS, type AgentType, type CharacterSkin, type OrchestratorState } from "@/features/office/types/agent"
 
@@ -34,6 +35,7 @@ export class OfficeScene {
   private bubbles: Map<number, IssueBubble> = new Map()
   private deskLabels: Map<number, Text> = new Map()
   private outputTexts: Map<number, Text> = new Map()
+  private puppy: OfficePuppy | null = null
   private currentAgentType: AgentType = "claude"
   private currentSlotCount = 0
   private layout: OfficeLayout | null = null
@@ -71,6 +73,8 @@ export class OfficeScene {
   private clearLayers() {
     for (const [, character] of this.characters) character.destroy()
     for (const [, bubble] of this.bubbles) bubble.destroy()
+    this.puppy?.destroy()
+    this.puppy = null
     this.characters.clear()
     this.bubbles.clear()
     this.deskLabels.clear()
@@ -229,6 +233,10 @@ export class OfficeScene {
       this.uiLayer.addChild(bubble.container)
       this.bubbles.set(i, bubble)
     }
+
+    // Office puppy
+    this.puppy = new OfficePuppy(walkableTiles, this.app.ticker)
+    this.characterLayer.addChild(this.puppy.container)
   }
 
   updateState(state: OrchestratorState) {

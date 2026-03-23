@@ -421,4 +421,121 @@ function generateFurnitureSprite(
   return canvas
 }
 
-export { SPRITE_SIZE }
+// ── Puppy sprite ──
+
+const PUPPY_SIZE = 20
+
+function createPuppyCanvas(): OffscreenCanvas {
+  return new OffscreenCanvas(PUPPY_SIZE, PUPPY_SIZE)
+}
+
+function drawPuppyStanding(ctx: OffscreenCanvasRenderingContext2D, frame: number) {
+  // Body — warm tan
+  ctx.fillStyle = "#D4A058"
+  ctx.fillRect(5, 8, 10, 6)
+
+  // Head
+  ctx.fillStyle = "#D4A058"
+  ctx.fillRect(11, 4, 7, 6)
+
+  // Ears
+  ctx.fillStyle = "#8B5E3C"
+  ctx.fillRect(12, 2, 2, 3)
+  ctx.fillRect(16, 2, 2, 3)
+
+  // Eyes
+  ctx.fillStyle = "#222"
+  ctx.fillRect(13, 6, 1, 1)
+  ctx.fillRect(16, 6, 1, 1)
+
+  // Nose
+  ctx.fillStyle = "#333"
+  ctx.fillRect(15, 8, 2, 1)
+
+  // Tongue (wag frame)
+  if (frame % 2 === 0) {
+    ctx.fillStyle = "#FF8888"
+    ctx.fillRect(16, 9, 1, 2)
+  }
+
+  // Legs
+  ctx.fillStyle = "#C49048"
+  ctx.fillRect(6, 14, 2, 4)
+  ctx.fillRect(12, 14, 2, 4)
+
+  // Tail — wags up/down
+  ctx.fillStyle = "#D4A058"
+  const tailY = frame % 2 === 0 ? 6 : 8
+  ctx.fillRect(3, tailY, 2, 3)
+  ctx.fillRect(2, tailY, 1, 2)
+}
+
+function drawPuppyWalking(ctx: OffscreenCanvasRenderingContext2D, frame: number) {
+  // Body
+  ctx.fillStyle = "#D4A058"
+  ctx.fillRect(5, 8, 10, 6)
+
+  // Head
+  ctx.fillStyle = "#D4A058"
+  ctx.fillRect(11, 4, 7, 6)
+
+  // Ears — bounce
+  const earBounce = frame % 2 === 0 ? 0 : -1
+  ctx.fillStyle = "#8B5E3C"
+  ctx.fillRect(12, 2 + earBounce, 2, 3)
+  ctx.fillRect(16, 2 + earBounce, 2, 3)
+
+  // Eyes
+  ctx.fillStyle = "#222"
+  ctx.fillRect(13, 6, 1, 1)
+  ctx.fillRect(16, 6, 1, 1)
+
+  // Nose
+  ctx.fillStyle = "#333"
+  ctx.fillRect(15, 8, 2, 1)
+
+  // Legs — alternating walk
+  ctx.fillStyle = "#C49048"
+  const step = frame % 4
+  if (step === 0) {
+    ctx.fillRect(6, 13, 2, 5)
+    ctx.fillRect(12, 15, 2, 3)
+  } else if (step === 1) {
+    ctx.fillRect(6, 14, 2, 4)
+    ctx.fillRect(12, 14, 2, 4)
+  } else if (step === 2) {
+    ctx.fillRect(6, 15, 2, 3)
+    ctx.fillRect(12, 13, 2, 5)
+  } else {
+    ctx.fillRect(6, 14, 2, 4)
+    ctx.fillRect(12, 14, 2, 4)
+  }
+
+  // Tail — wagging
+  ctx.fillStyle = "#D4A058"
+  const tailY = frame % 2 === 0 ? 5 : 9
+  ctx.fillRect(3, tailY, 2, 3)
+  ctx.fillRect(2, tailY, 1, 2)
+}
+
+const puppyTextureCache = new Map<string, Texture>()
+
+export function getPuppyTexture(frame: number, isWalking: boolean): Texture {
+  const key = `puppy-${frame}-${isWalking}`
+  let texture = puppyTextureCache.get(key)
+  if (!texture) {
+    const canvas = createPuppyCanvas()
+    const ctx = canvas.getContext("2d")!
+    ctx.clearRect(0, 0, PUPPY_SIZE, PUPPY_SIZE)
+    if (isWalking) {
+      drawPuppyWalking(ctx, frame)
+    } else {
+      drawPuppyStanding(ctx, frame)
+    }
+    texture = Texture.from(canvas)
+    puppyTextureCache.set(key, texture)
+  }
+  return texture
+}
+
+export { SPRITE_SIZE, PUPPY_SIZE }
