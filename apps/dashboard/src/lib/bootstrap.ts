@@ -10,8 +10,19 @@ import { Orchestrator } from "@agent-valley/core/orchestrator/orchestrator"
 import { setOrchestrator } from "@/lib/orchestrator-singleton"
 
 export async function bootstrap() {
-  // Resolve project root from known location (apps/dashboard/) rather than relying on CWD
-  const projectRoot = path.resolve(__dirname, "../../../..")
+  // Resolve project root: works in both dev (apps/dashboard/src/lib/) and standalone (.next/standalone/apps/dashboard/)
+  // Walk up from CWD until we find WORKFLOW.md
+  let projectRoot = process.cwd()
+  for (let i = 0; i < 6; i++) {
+    try {
+      const candidate = i === 0 ? projectRoot : path.resolve(projectRoot, "../".repeat(i))
+      await import("node:fs/promises").then((fs) => fs.access(path.join(candidate, "WORKFLOW.md")))
+      projectRoot = candidate
+      break
+    } catch {
+      continue
+    }
+  }
   process.chdir(projectRoot)
 
   // Prevent orchestrator errors from crashing the Next.js process

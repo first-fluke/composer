@@ -24,7 +24,23 @@ function log(msg: string): void {
   appendFileSync(logFile, line)
 }
 
+let currentProc: ReturnType<typeof spawn> | null = null
+
+function killCurrentProc(): void {
+  if (currentProc && currentProc.exitCode === null) {
+    try {
+      currentProc.kill("SIGKILL")
+    } catch {
+      /* already dead */
+    }
+  }
+  currentProc = null
+}
+
 function startDashboard(): void {
+  // Ensure previous process is dead before starting a new one
+  killCurrentProc()
+
   let proc: ReturnType<typeof spawn>
 
   // Production: run standalone server.js directly (no node_modules needed)
@@ -66,10 +82,13 @@ function startDashboard(): void {
     log(`Dashboard started via bun run ${mode} (pid: ${proc.pid})`)
   }
 
+  currentProc = proc
+
   proc.stdout?.on("data", (chunk: Buffer) => appendFileSync(logFile, chunk))
   proc.stderr?.on("data", (chunk: Buffer) => appendFileSync(logFile, chunk))
 
   proc.on("exit", (code, signal) => {
+    currentProc = null
     log(`Dashboard exited (code: ${code}, signal: ${signal})`)
     restarts++
 
