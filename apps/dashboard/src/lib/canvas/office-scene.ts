@@ -61,7 +61,7 @@ export class OfficeScene {
     if (this.initialized) return
 
     await this.app.init({
-      canvas,
+      canvas: canvas as never,
       width: 512,
       height: OFFICE_ROWS * TILE_SIZE,
       backgroundColor: 0x1a1a2e,
@@ -246,7 +246,7 @@ export class OfficeScene {
       )
       // Bathroom semaphore: only 1 agent at a time
       const agentIndex = i
-      character.isInterestPointAvailable = (col, row) => {
+      character.isInterestPointAvailable = (col: number, row: number) => {
         if (col === this.bathroomCol && row === this.bathroomRow) {
           if (this.bathroomOccupant === null) {
             this.bathroomOccupant = agentIndex
@@ -257,14 +257,14 @@ export class OfficeScene {
         return true
       }
       // Entry waypoint: walk to tile above bathroom door first, then down
-      character.getWaypoint = (col, row) => {
+      character.getWaypoint = (col: number, row: number) => {
         if (col === this.bathroomCol && row === this.bathroomRow) {
           return { col: this.bathroomCol, row: this.bathroomRow - 1 }
         }
         return null
       }
       // Exit waypoint: walk up through door first, then to office target
-      character.getExitWaypoint = (fromX, fromY) => {
+      character.getExitWaypoint = (fromX: number, fromY: number) => {
         const bathX = this.bathroomCol * TILE_SIZE
         const bathY = this.bathroomRow * TILE_SIZE
         if (Math.abs(fromX - bathX) < TILE_SIZE && Math.abs(fromY - bathY) < TILE_SIZE) {
@@ -285,7 +285,7 @@ export class OfficeScene {
 
     // Office puppy with poop callback
     this.puppy = new OfficePuppy(walkableTiles, this.app.ticker)
-    this.puppy.onPoop = (x, y) => this.spawnPoop(x, y)
+    this.puppy.onPoop = (x: number, y: number) => this.spawnPoop(x, y)
     this.characterLayer.addChild(this.puppy.container)
 
     // Cockatoo — perches on plant furniture

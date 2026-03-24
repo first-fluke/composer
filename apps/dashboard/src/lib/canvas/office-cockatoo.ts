@@ -34,7 +34,7 @@ export class OfficeCockatoo {
 
     // Start perched on a random plant
     this.currentPlantIndex = Math.floor(Math.random() * plantPositions.length)
-    const startPlant = plantPositions[this.currentPlantIndex]
+    const startPlant = plantPositions[this.currentPlantIndex]!
     this.container.x = startPlant.col * TILE_SIZE + 8
     this.container.y = startPlant.row * TILE_SIZE + PERCH_Y_OFFSET
     this.targetX = this.container.x
@@ -103,7 +103,7 @@ export class OfficeCockatoo {
   }
 
   private flyDistance(): number {
-    const plant = this.plantPositions[this.currentPlantIndex]
+    const plant = this.plantPositions[this.currentPlantIndex]!
     const tx = plant.col * TILE_SIZE + 8
     const ty = plant.row * TILE_SIZE + PERCH_Y_OFFSET
     const dx = tx - this.container.x
@@ -124,7 +124,7 @@ export class OfficeCockatoo {
     } while (nextIndex === this.currentPlantIndex)
 
     this.currentPlantIndex = nextIndex
-    const plant = this.plantPositions[this.currentPlantIndex]
+    const plant = this.plantPositions[this.currentPlantIndex]!
     this.targetX = plant.col * TILE_SIZE + 8
     this.targetY = plant.row * TILE_SIZE + PERCH_Y_OFFSET
     this.isFlying = true

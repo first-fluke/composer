@@ -40,10 +40,18 @@ function makeConfig(): Config {
   } as Config
 }
 
+interface MetricsResult {
+  systemMetrics: { memoryRss: number; memoryTotal: number; cpuUser: number; uptime: number }
+}
+
 function callBuild() {
-  return buildOrchestratorStatus(makeState(), new Map(), makeAgentRunner(), makeRetryQueue(), makeConfig()) as {
-    systemMetrics: Record<string, number>
-  }
+  return buildOrchestratorStatus(
+    makeState(),
+    new Map(),
+    makeAgentRunner(),
+    makeRetryQueue(),
+    makeConfig(),
+  ) as unknown as MetricsResult
 }
 
 describe("buildOrchestratorStatus — metrics caching", () => {

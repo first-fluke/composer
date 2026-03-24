@@ -33,8 +33,8 @@ export async function bootstrap() {
     getStatus: handlers.getStatus,
     handleWebhook: handlers.onWebhook,
     stop: () => orchestrator.stop(),
-    on: (event, handler) => orchestrator.on(event, handler),
-    off: (event, handler) => orchestrator.off(event, handler),
+    on: (event: string, handler: (...args: unknown[]) => void) => orchestrator.on(event, handler),
+    off: (event: string, handler: (...args: unknown[]) => void) => orchestrator.off(event, handler),
   })
 
   // Graceful shutdown: stop orchestrator and kill agent processes on exit

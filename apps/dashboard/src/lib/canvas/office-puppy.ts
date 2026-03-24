@@ -34,7 +34,7 @@ export class OfficePuppy {
     this.container.addChild(this.sprite)
 
     // Start at a random walkable tile
-    const startTile = walkableTiles[Math.floor(Math.random() * walkableTiles.length)]
+    const startTile = walkableTiles[Math.floor(Math.random() * walkableTiles.length)]!
     this.container.x = startTile.col * TILE_SIZE + 6
     this.container.y = startTile.row * TILE_SIZE + 6
     this.targetX = this.container.x
@@ -107,7 +107,7 @@ export class OfficePuppy {
   }
 
   private pickTarget() {
-    const tile = this.walkableTiles[Math.floor(Math.random() * this.walkableTiles.length)]
+    const tile = this.walkableTiles[Math.floor(Math.random() * this.walkableTiles.length)]!
     this.targetX = tile.col * TILE_SIZE + 6
     this.targetY = tile.row * TILE_SIZE + 6
     this.isMoving = true

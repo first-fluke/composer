@@ -210,19 +210,16 @@ export class AgentCharacter {
   }
 
   private pickWanderTarget() {
+    const pickRandom = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)] as T
     let tile: { col: number; row: number }
 
     if (this.interestPoints.length > 0 && Math.random() < INTEREST_POINT_CHANCE) {
       const available = this.isInterestPointAvailable
         ? this.interestPoints.filter((p) => this.isInterestPointAvailable!(p.col, p.row))
         : this.interestPoints
-      if (available.length > 0) {
-        tile = available[Math.floor(Math.random() * available.length)]
-      } else {
-        tile = this.walkableTiles[Math.floor(Math.random() * this.walkableTiles.length)]
-      }
+      tile = available.length > 0 ? pickRandom(available) : pickRandom(this.walkableTiles)
     } else {
-      tile = this.walkableTiles[Math.floor(Math.random() * this.walkableTiles.length)]
+      tile = pickRandom(this.walkableTiles)
     }
 
     const finalX = tile.col * TILE_SIZE

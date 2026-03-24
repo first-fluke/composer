@@ -30,7 +30,7 @@ export function useLocalOrchestrator(
       maxParallel: data.config.maxParallel,
       online: data.isRunning,
       joinedAt: "",
-      activeIssues: data.activeWorkspaces.map((ws) => ({
+      activeIssues: data.activeWorkspaces.map((ws: { key: string; issueId: string; startedAt: string }) => ({
         issueKey: ws.key,
         issueId: ws.issueId,
         agentType: data.config.agentType,
