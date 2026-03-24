@@ -14,4 +14,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: first-fluke/oh-my-agent/action@v1
+      - uses: first-fluke/oma-update-action@v1
