@@ -66,8 +66,8 @@ describe("sortByIssueNumber", () => {
 describe("buildParentSummary", () => {
   test("generates summary with child statuses", () => {
     const children: DagNode[] = [
-      { issueId: "i1", identifier: "PROJ-1", status: "done", dependencies: [], parentId: null },
-      { issueId: "i2", identifier: "PROJ-2", status: "done", dependencies: [], parentId: null },
+      { issueId: "i1", identifier: "PROJ-1", status: "done", children: [], parentId: null, blockedBy: [], blocks: [] },
+      { issueId: "i2", identifier: "PROJ-2", status: "done", children: [], parentId: null, blockedBy: [], blocks: [] },
     ]
 
     const result = buildParentSummary(children)

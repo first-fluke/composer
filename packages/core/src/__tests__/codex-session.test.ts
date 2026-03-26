@@ -7,7 +7,7 @@ import { chmodSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 import { afterEach, beforeEach, describe, expect, test } from "vitest"
-import type { AgentEvent, RunResult } from "../sessions/agent-session"
+import type { AgentEvent } from "../sessions/agent-session"
 
 const MOCK_DIR = resolve(tmpdir(), "av-test-codex-mock")
 const MOCK_SCRIPT = resolve(MOCK_DIR, "codex")
@@ -156,11 +156,11 @@ describe("CodexSession", () => {
     const session = new CodexSession()
 
     const outputs: string[] = []
-    let completed: RunResult | null = null
+    const completions: Array<{ exitCode: number; output: string }> = []
 
     session.on("output", (e) => outputs.push(e.chunk))
     session.on("complete", (e) => {
-      completed = e.result
+      completions.push({ exitCode: e.result.exitCode, output: e.result.output })
     })
 
     await session.start({ type: "codex", timeout: 10, workspacePath: "/tmp" })
@@ -170,9 +170,9 @@ describe("CodexSession", () => {
     await new Promise((r) => setTimeout(r, 300))
 
     expect(outputs).toContain("Hello from Codex")
-    expect(completed).not.toBeNull()
-    expect(completed?.exitCode).toBe(0)
-    expect(completed?.output).toContain("Hello from Codex")
+    expect(completions).toHaveLength(1)
+    expect(completions[0]?.exitCode).toBe(0)
+    expect(completions[0]?.output).toContain("Hello from Codex")
 
     await session.dispose()
   })
@@ -206,12 +206,12 @@ describe("CodexSession", () => {
 
     const tools: string[] = []
     const fileChanges: Array<{ path: string; changeType: string }> = []
-    let completed: RunResult | null = null
+    const completedFiles: string[][] = []
 
     session.on("toolUse", (e) => tools.push(e.tool))
     session.on("fileChange", (e) => fileChanges.push({ path: e.path, changeType: e.changeType }))
     session.on("complete", (e) => {
-      completed = e.result
+      completedFiles.push(e.result.filesChanged)
     })
 
     await session.start({ type: "codex", timeout: 10, workspacePath: "/tmp" })
@@ -223,9 +223,9 @@ describe("CodexSession", () => {
     expect(fileChanges).toContainEqual({ path: "src/index.ts", changeType: "add" })
     expect(fileChanges).toContainEqual({ path: "src/utils.ts", changeType: "modify" })
     // Duplicate file path should only appear once in completed result
-    expect(completed).not.toBeNull()
-    expect(completed?.filesChanged).toContain("src/index.ts")
-    expect(completed?.filesChanged).toContain("src/utils.ts")
+    expect(completedFiles).toHaveLength(1)
+    expect(completedFiles[0]).toContain("src/index.ts")
+    expect(completedFiles[0]).toContain("src/utils.ts")
 
     await session.dispose()
   })

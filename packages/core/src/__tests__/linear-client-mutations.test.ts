@@ -51,11 +51,11 @@ function mockFetchSequence(responses: MockFetchOpts[]): {
   globalThis.fetch = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
     const body = JSON.parse(init?.body as string)
     captured.push({ query: body.query, variables: body.variables })
-    const lastResp = responses[responses.length - 1]
-    const resp = responses[callIdx] ?? lastResp
+    const resp = responses[callIdx] ?? responses[responses.length - 1]
     callIdx++
-    return new Response(JSON.stringify({ data: resp.data }), {
-      status: resp.status ?? 200,
+    const data = resp?.data ?? {}
+    return new Response(JSON.stringify({ data }), {
+      status: resp?.status ?? 200,
       headers: { "Content-Type": "application/json" },
     })
   }) as unknown as typeof fetch

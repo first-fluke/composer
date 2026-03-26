@@ -7,7 +7,7 @@ import { chmodSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 import { afterEach, beforeEach, describe, expect, test } from "vitest"
-import type { AgentEvent, RunResult } from "../sessions/agent-session"
+import type { AgentEvent } from "../sessions/agent-session"
 
 const MOCK_DIR = resolve(tmpdir(), "av-test-gemini-mock")
 const MOCK_SCRIPT = resolve(MOCK_DIR, "gemini")
@@ -105,11 +105,11 @@ describe("GeminiSession — fallback mode", () => {
     const session = new GeminiSession()
 
     const outputs: string[] = []
-    let completed: RunResult | null = null
+    let completedExitCode: number | null = null
 
     session.on("output", (e) => outputs.push(e.chunk))
     session.on("complete", (e) => {
-      completed = e.result
+      completedExitCode = e.result.exitCode
     })
 
     await session.start({ type: "gemini", timeout: 10, workspacePath: "/tmp" })
@@ -117,8 +117,7 @@ describe("GeminiSession — fallback mode", () => {
 
     expect(outputs.length).toBeGreaterThan(0)
     expect(outputs[0]).toBe("Hello from Gemini")
-    expect(completed).not.toBeNull()
-    expect(completed?.exitCode).toBe(0)
+    expect(completedExitCode).toBe(0)
   })
 
   test("parses JSON with leading MCP noise", async () => {
@@ -144,10 +143,10 @@ describe("GeminiSession — fallback mode", () => {
     const session = new GeminiSession()
 
     const outputs: string[] = []
-    let completed: RunResult | null = null
+    let completed = false
     session.on("output", (e) => outputs.push(e.chunk))
-    session.on("complete", (e) => {
-      completed = e.result
+    session.on("complete", () => {
+      completed = true
     })
 
     await session.start({ type: "gemini", timeout: 10, workspacePath: "/tmp" })
@@ -155,7 +154,7 @@ describe("GeminiSession — fallback mode", () => {
 
     expect(outputs.length).toBeGreaterThan(0)
     expect(outputs[0]).toContain("Just plain text output")
-    expect(completed).not.toBeNull()
+    expect(completed).toBe(true)
   })
 
   test("emits error on non-zero exit code", async () => {
