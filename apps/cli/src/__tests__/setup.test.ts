@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { EnvConfig, WorkflowState } from "../setup"
-import { buildEnvContent, findWorkflowState, linearQuery, maskApiKey } from "../setup"
+import type { WorkflowState } from "../setup"
+import { buildGlobalYaml, buildProjectYaml, findWorkflowState, linearQuery, maskApiKey } from "../setup"
 
 // ── findWorkflowState ────────────────────────────────────────────────────────
 
@@ -40,7 +40,6 @@ describe("findWorkflowState", () => {
   })
 
   it("returns first match when multiple states share a type", () => {
-    // "In Progress" and "In Review" are both "started", but name match wins
     const result = findWorkflowState(states, ["In Review"], "started")
     expect(result).toEqual({ id: "ddd", name: "In Review", type: "started" })
   })
@@ -56,17 +55,33 @@ describe("findWorkflowState", () => {
   })
 
   it("matches multiple name candidates", () => {
-    // "Cancelled" (double l) doesn't exist but "Canceled" (single l) does
     const result = findWorkflowState(states, ["Cancelled", "Canceled"], "canceled")
     expect(result).toEqual({ id: "fff", name: "Canceled", type: "canceled" })
   })
 })
 
-// ── buildEnvContent ──────────────────────────────────────────────────────────
+// ── buildGlobalYaml ──────────────────────────────────────────────────────────
 
-describe("buildEnvContent", () => {
-  const config: EnvConfig = {
-    apiKey: "lin_api_test123",
+describe("buildGlobalYaml", () => {
+  it("generates valid YAML with API key and agent type", () => {
+    const content = buildGlobalYaml({ apiKey: "lin_api_test123", agentType: "claude", maxParallel: 3 })
+
+    expect(content).toContain("api_key: lin_api_test123")
+    expect(content).toContain("type: claude")
+    expect(content).toContain("level: info")
+    expect(content).toContain("port: 9741")
+  })
+
+  it("preserves different agent types", () => {
+    expect(buildGlobalYaml({ apiKey: "key", agentType: "codex", maxParallel: 3 })).toContain("type: codex")
+    expect(buildGlobalYaml({ apiKey: "key", agentType: "gemini", maxParallel: 3 })).toContain("type: gemini")
+  })
+})
+
+// ── buildProjectYaml ─────────────────────────────────────────────────────────
+
+describe("buildProjectYaml", () => {
+  const config = {
     teamKey: "FIR",
     teamUuid: "uuid-team-123",
     webhookSecret: "lin_wh_secret456",
@@ -75,51 +90,26 @@ describe("buildEnvContent", () => {
     doneStateId: "state-done",
     cancelledStateId: "state-cancel",
     workspaceRoot: "/home/user/workspaces",
-    agentType: "claude",
-    maxParallel: 3,
   }
 
-  it("generates valid .env content with all fields", () => {
-    const content = buildEnvContent(config)
+  it("generates valid YAML with all project fields", () => {
+    const content = buildProjectYaml(config)
 
-    expect(content).toContain("LINEAR_API_KEY=lin_api_test123")
-    expect(content).toContain("LINEAR_TEAM_ID=FIR")
-    expect(content).toContain("LINEAR_TEAM_UUID=uuid-team-123")
-    expect(content).toContain("LINEAR_WEBHOOK_SECRET=lin_wh_secret456")
-    expect(content).toContain("LINEAR_WORKFLOW_STATE_TODO=state-todo")
-    expect(content).toContain("LINEAR_WORKFLOW_STATE_IN_PROGRESS=state-ip")
-    expect(content).toContain("LINEAR_WORKFLOW_STATE_DONE=state-done")
-    expect(content).toContain("LINEAR_WORKFLOW_STATE_CANCELLED=state-cancel")
-    expect(content).toContain("WORKSPACE_ROOT=/home/user/workspaces")
-    expect(content).toContain("AGENT_TYPE=claude")
-    expect(content).toContain("MAX_PARALLEL=3")
-    expect(content).toContain("SERVER_PORT=9741")
-    expect(content).toContain("LOG_LEVEL=info")
-    expect(content).toContain("LOG_FORMAT=json")
+    expect(content).toContain("team_id: FIR")
+    expect(content).toContain("team_uuid: uuid-team-123")
+    expect(content).toContain("webhook_secret: lin_wh_secret456")
+    expect(content).toContain("todo: state-todo")
+    expect(content).toContain("in_progress: state-ip")
+    expect(content).toContain("done: state-done")
+    expect(content).toContain("cancelled: state-cancel")
+    expect(content).toContain("root: /home/user/workspaces")
+    expect(content).toContain("mode: merge")
   })
 
-  it("includes section comment headers", () => {
-    const content = buildEnvContent(config)
-
-    expect(content).toContain("# ── Linear Issue Tracker")
-    expect(content).toContain("# ── Symphony Orchestrator")
-    expect(content).toContain("# ── Agent Selection")
-    expect(content).toContain("# ── Observability")
-  })
-
-  it("ends with newline", () => {
-    const content = buildEnvContent(config)
-    expect(content.endsWith("\n")).toBe(true)
-  })
-
-  it("preserves different agent types", () => {
-    expect(buildEnvContent({ ...config, agentType: "codex" })).toContain("AGENT_TYPE=codex")
-    expect(buildEnvContent({ ...config, agentType: "gemini" })).toContain("AGENT_TYPE=gemini")
-  })
-
-  it("handles special characters in values", () => {
-    const content = buildEnvContent({ ...config, apiKey: "lin_api_a+b=c/d" })
-    expect(content).toContain("LINEAR_API_KEY=lin_api_a+b=c/d")
+  it("includes default prompt template", () => {
+    const content = buildProjectYaml(config)
+    expect(content).toContain("{{issue.identifier}}")
+    expect(content).toContain("{{issue.title}}")
   })
 })
 

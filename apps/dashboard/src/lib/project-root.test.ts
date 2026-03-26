@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, test } from "vitest"
@@ -15,11 +15,11 @@ describe("resolveProjectRoot", () => {
     )
   })
 
-  test("walks up from standalone dashboard path to find WORKFLOW.md", async () => {
+  test("walks up from standalone dashboard path to find valley.yaml", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "av-bootstrap-"))
     tempDirs.push(root)
 
-    await writeFile(path.join(root, "WORKFLOW.md"), "---\n---\n")
+    await writeFile(path.join(root, "valley.yaml"), "linear:\n  team_id: TEST\n")
 
     const standaloneDashboardDir = path.join(root, "apps", "dashboard", ".next", "standalone", "apps", "dashboard")
     await mkdir(standaloneDashboardDir, { recursive: true })
@@ -27,10 +27,10 @@ describe("resolveProjectRoot", () => {
     await expect(resolveProjectRoot(standaloneDashboardDir)).resolves.toBe(root)
   })
 
-  test("throws when WORKFLOW.md cannot be found", async () => {
+  test("throws when valley.yaml cannot be found", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "av-bootstrap-miss-"))
     tempDirs.push(root)
 
-    await expect(resolveProjectRoot(root)).rejects.toThrow("WORKFLOW.md not found")
+    await expect(resolveProjectRoot(root)).rejects.toThrow("valley.yaml not found")
   })
 })
