@@ -11,6 +11,7 @@
     "start": "bun run --cwd apps/dashboard dev",
     "lint": "biome check .",
     "lint:fix": "biome check --fix .",
+    "typecheck": "tsc --noEmit -p packages/core/tsconfig.json && tsc --noEmit -p apps/cli/tsconfig.json",
     "test": "vitest run --config vitest.config.ts",
     "prepare": "husky"
   },
