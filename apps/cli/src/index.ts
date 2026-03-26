@@ -54,9 +54,9 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-function ensureEnv(): void {
-  if (!existsSync(resolve(ROOT, ".env"))) {
-    console.log(pc.red("No .env found. Run `av setup` first."))
+function ensureConfig(): void {
+  if (!existsSync(resolve(ROOT, "valley.yaml"))) {
+    console.log(pc.red("No valley.yaml found. Run `av setup` first."))
     process.exit(1)
   }
 }
@@ -103,7 +103,7 @@ program.name("av").description("Agent Valley — AI agent orchestrator").version
 program
   .command("setup")
   .description("Interactive setup wizard")
-  .option("--edit", "Modify specific values in existing .env")
+  .option("--edit", "Modify specific values in existing config")
   .action(async (opts: { edit?: boolean }) => {
     if (opts.edit) {
       const { setupEdit } = await import("./setup")
@@ -128,7 +128,7 @@ program
   .command("up")
   .description("Start dashboard + orchestrator + ngrok (background daemon)")
   .action(async () => {
-    ensureEnv()
+    ensureConfig()
 
     // Check if already running
     const existing = readPids()
@@ -226,7 +226,7 @@ program
   .command("dev")
   .description("Start in foreground (with file watching + auto-restart)")
   .action(async () => {
-    ensureEnv()
+    ensureConfig()
 
     const port = process.env.SERVER_PORT ?? "9741"
     let dashProc: ChildProcess | null = null
@@ -253,7 +253,7 @@ program
 
     // Watch config files
     const chokidar = await import("chokidar")
-    const watcher = chokidar.watch([resolve(ROOT, "WORKFLOW.md"), resolve(ROOT, ".env")], {
+    const watcher = chokidar.watch([resolve(ROOT, "valley.yaml")], {
       ignoreInitial: true,
     })
 
@@ -393,7 +393,7 @@ program
           console.log(
             `  ${pc.dim("ISSUE".padEnd(10))}${pc.dim("STATUS".padEnd(10))}${pc.dim("DURATION".padEnd(12))}${pc.dim("LAST OUTPUT")}`,
           )
-          console.log(pc.dim("  " + "─".repeat(70)))
+          console.log(pc.dim(`  ${"─".repeat(70)}`))
 
           for (const w of workspaces) {
             const key = ((w.key as string) ?? "???").padEnd(10)

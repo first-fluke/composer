@@ -1,58 +1,10 @@
 /**
- * Workflow Loader tests — YAML parsing, prompt rendering, input sanitization.
+ * Workflow Loader tests — prompt rendering and input sanitization.
+ * parseWorkflow was removed — config now comes from valley.yaml via yaml-loader.
  */
 import { describe, expect, test } from "vitest"
-import { parseWorkflow, renderPrompt, sanitizeIssueBody } from "../config/workflow-loader.ts"
+import { renderPrompt, sanitizeIssueBody } from "../config/workflow-loader.ts"
 import type { Issue, RunAttempt } from "../domain/models.ts"
-
-// ── parseWorkflow ───────────────────────────────────────────────────
-
-describe("parseWorkflow", () => {
-  test("valid WORKFLOW.md with front matter + template", () => {
-    const content = [
-      "---",
-      "tracker:",
-      "  type: linear",
-      "agent:",
-      "  type: claude",
-      "---",
-      "You are working on {{issue.identifier}}: {{issue.title}}",
-    ].join("\n")
-
-    const result = parseWorkflow(content)
-    expect(result.promptTemplate).toContain("{{issue.identifier}}")
-    expect(result.config).toBeDefined()
-  })
-
-  test("missing --- delimiters throws with fix message", () => {
-    const content = "Just some text without delimiters"
-    expect(() => parseWorkflow(content)).toThrow("WORKFLOW.md must have YAML front matter")
-    expect(() => parseWorkflow(content)).toThrow("Fix:")
-  })
-
-  test("single --- delimiter throws", () => {
-    const content = "---\ntracker:\n  type: linear"
-    expect(() => parseWorkflow(content)).toThrow("WORKFLOW.md must have YAML front matter")
-  })
-
-  test("empty YAML section parses to empty config", () => {
-    const content = "---\n---\nPrompt text here"
-    const result = parseWorkflow(content)
-    expect(result.config).toBeDefined()
-    expect(result.promptTemplate).toBe("Prompt text here")
-  })
-
-  test("prompt template preserves content after second ---", () => {
-    const content = ["---", "agent:", "  type: claude", "---", "Line 1", "---", "Line 3 after extra delimiter"].join(
-      "\n",
-    )
-
-    const result = parseWorkflow(content)
-    expect(result.promptTemplate).toContain("Line 1")
-    expect(result.promptTemplate).toContain("---")
-    expect(result.promptTemplate).toContain("Line 3 after extra delimiter")
-  })
-})
 
 // ── renderPrompt ────────────────────────────────────────────────────
 

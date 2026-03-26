@@ -5,9 +5,9 @@
 #   ./scripts/dev.sh
 #
 # What it does:
-#   1. Checks required prerequisites (git, env vars)
-#   2. Loads .env if it exists (warns if missing)
-#   3. Validates WORKSPACE_ROOT is set and is an absolute path
+#   1. Checks required prerequisites (git)
+#   2. Validates valley.yaml exists in project root
+#   3. Validates ~/.config/agent-valley/settings.yaml exists (warns if missing)
 #   4. Runs lint/test if src/ exists
 #   5. Prints a clear status summary
 #
@@ -59,100 +59,29 @@ fi
 ok "git $(git --version | awk '{print $3}')"
 
 # ─────────────────────────────────────────────────────────────────────────────
-section ".env"
+section "Configuration"
 
-ENV_FILE="${REPO_ROOT}/.env"
-ENV_EXAMPLE="${REPO_ROOT}/.env.example"
+VALLEY_FILE="${REPO_ROOT}/valley.yaml"
+GLOBAL_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/agent-valley"
+GLOBAL_FILE="${GLOBAL_DIR}/settings.yaml"
 
-if [ -f "${ENV_FILE}" ]; then
-  # shellcheck source=/dev/null
-  set -a
-  # Load .env but ignore comments and blank lines
-  while IFS= read -r line || [ -n "$line" ]; do
-    case "$line" in
-      ''|\#*) continue ;;
-    esac
-    export "${line?}"
-  done < "${ENV_FILE}"
-  set +a
-  ok ".env loaded from ${ENV_FILE}"
-  add_ok ".env loaded"
+if [ -f "${VALLEY_FILE}" ]; then
+  ok "valley.yaml found at ${VALLEY_FILE}"
+  add_ok "valley.yaml found"
 else
-  warn ".env not found at ${ENV_FILE}"
-  warn "  → Copy .env.example and fill in your values:"
-  warn "      cp ${ENV_EXAMPLE} ${ENV_FILE}"
-  warn "  → Required variables are listed in .env.example"
-  add_warn ".env missing — copy from .env.example"
+  fail "valley.yaml not found at ${VALLEY_FILE}"
+  fail "  → Run 'av setup' to create valley.yaml"
+  add_fail "valley.yaml missing — run av setup"
 fi
 
-# ─────────────────────────────────────────────────────────────────────────────
-section "Environment variables"
-
-# Required variables (see AGENTS.md section 1 and .env.example)
-REQUIRED_VARS=(
-  LINEAR_API_KEY
-  LINEAR_TEAM_ID
-  LINEAR_TEAM_UUID
-  LINEAR_WORKFLOW_STATE_IN_PROGRESS
-  LINEAR_WORKFLOW_STATE_DONE
-  LINEAR_WORKFLOW_STATE_CANCELLED
-  WORKSPACE_ROOT
-)
-
-MISSING_VARS=()
-for var in "${REQUIRED_VARS[@]}"; do
-  value="${!var:-}"
-  if [ -z "$value" ]; then
-    MISSING_VARS+=("$var")
-  fi
-done
-
-if [ "${#MISSING_VARS[@]}" -gt 0 ]; then
-  fail "Missing required environment variables:"
-  for var in "${MISSING_VARS[@]}"; do
-    fail "  ${var}"
-    fail "    → Add it to ${ENV_FILE}"
-    fail "    → See ${ENV_EXAMPLE} for format"
-  done
-  add_fail "Missing env vars: ${MISSING_VARS[*]}"
-  # Continue checks but will exit at the end
-  ENV_VALID=false
+if [ -f "${GLOBAL_FILE}" ]; then
+  ok "Global config found at ${GLOBAL_FILE}"
+  add_ok "Global settings.yaml found"
 else
-  ok "All required environment variables are set"
-  add_ok "All env vars present"
-  ENV_VALID=true
-fi
-
-# ─────────────────────────────────────────────────────────────────────────────
-section "WORKSPACE_ROOT"
-
-WORKSPACE_ROOT="${WORKSPACE_ROOT:-}"
-
-if [ -z "${WORKSPACE_ROOT}" ]; then
-  fail "WORKSPACE_ROOT is not set."
-  fail "  → Add it to ${ENV_FILE}"
-  fail "  → It must be an absolute path, e.g.: WORKSPACE_ROOT=/home/you/workspaces"
-  add_fail "WORKSPACE_ROOT not set"
-  WORKSPACE_VALID=false
-else
-  # Must be absolute
-  case "${WORKSPACE_ROOT}" in
-    /*)
-      ok "WORKSPACE_ROOT=${WORKSPACE_ROOT}"
-      # Create if not exists (idempotent)
-      mkdir -p "${WORKSPACE_ROOT}"
-      ok "WORKSPACE_ROOT directory ready"
-      add_ok "WORKSPACE_ROOT=${WORKSPACE_ROOT}"
-      WORKSPACE_VALID=true
-      ;;
-    *)
-      fail "WORKSPACE_ROOT must be an absolute path."
-      fail "  → Current value: \"${WORKSPACE_ROOT}\""
-      fail "  → Fix: Set WORKSPACE_ROOT=/absolute/path/to/workspaces in ${ENV_FILE}"
-      add_fail "WORKSPACE_ROOT is relative (must be absolute)"
-      WORKSPACE_VALID=false
-      ;;
-  esac
+  warn "Global config not found at ${GLOBAL_FILE}"
+  warn "  → Run 'av setup' to create global settings"
+  warn "  → valley.yaml can include all required fields if preferred"
+  add_warn "Global settings.yaml missing"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -216,7 +145,7 @@ else
     info "Detected Python project"
     if command -v ruff >/dev/null 2>&1; then
       info "Running: ruff check"
-      if ruff check "${SRC_DIR}"; then
+      if ruff check "${REPO_ROOT}"; then
         ok "Ruff passed"
         add_ok "Ruff passed"
       else
@@ -292,4 +221,4 @@ fi
 
 printf "\n"
 ok "Dev environment ready."
-info "Start the orchestrator (see AGENTS.md for AGENT_TYPE options: claude, gemini, codex)"
+info "Start the orchestrator: av up"

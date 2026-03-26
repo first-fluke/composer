@@ -6,12 +6,12 @@ export async function resolveProjectRoot(startDir: string): Promise<string> {
 
   while (true) {
     try {
-      await access(path.join(current, "WORKFLOW.md"))
+      await access(path.join(current, "valley.yaml"))
       return current
     } catch {
       const parent = path.dirname(current)
       if (parent === current) {
-        throw new Error(`WORKFLOW.md not found while walking up from ${startDir}`)
+        throw new Error(`valley.yaml not found while walking up from ${startDir}`)
       }
       current = parent
     }

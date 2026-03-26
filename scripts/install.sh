@@ -172,8 +172,7 @@ chmod +x \
   "${TARGET_DIR}/scripts/harness/gc.sh" \
   "${TARGET_DIR}/scripts/harness/validate.sh" 2>/dev/null || true
 
-copy_file "WORKFLOW.md"
-copy_file ".env.example"
+copy_file "valley.example.yaml"
 
 echo ""
 
@@ -258,9 +257,9 @@ echo -e "${GREEN}${BOLD}  ✓ Agent Valley harness installed successfully${RESET
 echo ""
 echo "  Next steps:"
 echo ""
-if [[ ! -f "${TARGET_DIR}/.env" ]]; then
-  echo "  1. cp .env.example .env"
-  echo "     → Fill in LINEAR_API_KEY, LINEAR_TEAM_UUID, WORKSPACE_ROOT, etc."
+if [[ ! -f "${TARGET_DIR}/valley.yaml" ]]; then
+  echo "  1. Run 'av setup' to create valley.yaml and ~/.config/agent-valley/settings.yaml"
+  echo "     → Or copy valley.example.yaml to valley.yaml and fill in values"
   echo ""
   echo "  2. ./scripts/harness/validate.sh"
   echo "     → Verify architecture constraints and environment"

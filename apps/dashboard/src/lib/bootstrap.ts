@@ -10,8 +10,7 @@ import { setOrchestrator } from "@/lib/orchestrator-singleton"
 import { resolveProjectRoot } from "@/lib/project-root"
 
 export async function bootstrap() {
-  // Resolve project root: works in both dev (apps/dashboard/src/lib/) and standalone (.next/standalone/apps/dashboard/)
-  // Walk up until we find WORKFLOW.md, regardless of standalone nesting depth.
+  // Resolve project root: walk up until we find valley.yaml
   const projectRoot = await resolveProjectRoot(process.cwd())
   process.chdir(projectRoot)
 
@@ -23,7 +22,7 @@ export async function bootstrap() {
     logger.error("process", `Unhandled rejection (non-fatal): ${reason}`)
   })
 
-  const config = toOrchestratorConfig()
+  const config = toOrchestratorConfig(projectRoot)
   configureLogger(config.logLevel, config.logFormat)
 
   const orchestrator = new Orchestrator(config)

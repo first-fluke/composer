@@ -5,8 +5,8 @@
  */
 
 import { describe, expect, test } from "vitest"
-import type { Config } from "../config/env"
 import { resolveRouteWithScore } from "../config/routing"
+import type { Config } from "../config/yaml-loader"
 import type { Issue } from "../domain/models"
 import { parseScoreFromLabels } from "../domain/models"
 
@@ -81,6 +81,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     logFormat: "json",
     deliveryMode: "merge",
     routingRules: [],
+    promptTemplate: "test prompt",
     ...overrides,
   } as Config
 }

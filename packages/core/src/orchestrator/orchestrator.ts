@@ -4,10 +4,9 @@
  * Sole authority over in-memory runtime state.
  */
 
-import { access, readFile } from "node:fs/promises"
-import type { Config } from "../config/env"
 import { resolveRouteWithScore } from "../config/routing"
-import { parseWorkflow, renderPrompt } from "../config/workflow-loader"
+import { renderPrompt } from "../config/workflow-loader"
+import type { Config } from "../config/yaml-loader"
 import type { Issue, OrchestratorRuntimeState, RunAttempt, Workspace } from "../domain/models"
 import { logger } from "../observability/logger"
 import {
@@ -88,20 +87,8 @@ export class Orchestrator extends OrchestratorEventEmitter {
   async start(): Promise<void> {
     this.state.isRunning = true
 
-    // Load WORKFLOW.md prompt template
-    const workflowExists = await access("WORKFLOW.md")
-      .then(() => true)
-      .catch(() => false)
-    if (!workflowExists) {
-      throw new Error(
-        "WORKFLOW.md not found in project root.\n" +
-          "  Fix: Create WORKFLOW.md with YAML front matter (--- delimited) and a prompt template body.\n" +
-          "  See AGENTS.md for the expected format.",
-      )
-    }
-    const workflowContent = await readFile("WORKFLOW.md", "utf-8")
-    const { promptTemplate } = parseWorkflow(workflowContent)
-    this.promptTemplate = promptTemplate
+    // Load prompt template from config (valley.yaml)
+    this.promptTemplate = this.config.promptTemplate
 
     // Startup sync — run in background so server starts immediately
     const runStartupSync = async () => {

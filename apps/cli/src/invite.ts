@@ -38,17 +38,7 @@ const INVITE_KEYS: (keyof InviteData)[] = [
   "serverPort",
 ]
 
-const ENV_TO_INVITE: Record<string, keyof InviteData> = {
-  LINEAR_TEAM_ID: "teamId",
-  LINEAR_TEAM_UUID: "teamUuid",
-  LINEAR_WEBHOOK_SECRET: "webhookSecret",
-  LINEAR_WORKFLOW_STATE_TODO: "todoStateId",
-  LINEAR_WORKFLOW_STATE_IN_PROGRESS: "inProgressStateId",
-  LINEAR_WORKFLOW_STATE_DONE: "doneStateId",
-  LINEAR_WORKFLOW_STATE_CANCELLED: "cancelledStateId",
-  AGENT_TYPE: "agentType",
-  SERVER_PORT: "serverPort",
-}
+import { loadGlobalConfig, loadProjectConfig } from "@agent-valley/core/config/yaml-loader"
 
 export function encodeInvite(data: InviteData): string {
   const json = JSON.stringify(data)
@@ -120,40 +110,38 @@ export async function detectInviteFromClipboard(): Promise<InviteData | null> {
   return decodeInvite(clip)
 }
 
-function loadEnvFile(): Record<string, string> {
+export function extractInviteFromConfig(): InviteData | null {
   try {
-    const content = require("node:fs").readFileSync(".env", "utf-8") as string
-    const vars: Record<string, string> = {}
-    for (const line of content.split("\n")) {
-      const trimmed = line.trim()
-      if (!trimmed || trimmed.startsWith("#")) continue
-      const eqIdx = trimmed.indexOf("=")
-      if (eqIdx === -1) continue
-      vars[trimmed.slice(0, eqIdx)] = trimmed.slice(eqIdx + 1)
+    const global = loadGlobalConfig()
+    const project = loadProjectConfig()
+    if (!project?.linear) return null
+
+    const linear = project.linear
+    const states = linear.workflow_states
+
+    if (!linear.team_id || !linear.team_uuid || !linear.webhook_secret) return null
+    if (!states?.todo || !states?.in_progress || !states?.done || !states?.cancelled) return null
+
+    return {
+      teamId: linear.team_id,
+      teamUuid: linear.team_uuid,
+      webhookSecret: linear.webhook_secret,
+      todoStateId: states.todo,
+      inProgressStateId: states.in_progress,
+      doneStateId: states.done,
+      cancelledStateId: states.cancelled,
+      agentType: project.agent?.type ?? global?.agent?.type ?? "claude",
+      serverPort: String(project.server?.port ?? global?.server?.port ?? 9741),
     }
-    return vars
   } catch {
-    return {}
+    return null
   }
-}
-
-export function extractInviteFromEnv(): InviteData | null {
-  const vars = loadEnvFile()
-  const data: Partial<InviteData> = {}
-
-  for (const [envKey, inviteKey] of Object.entries(ENV_TO_INVITE)) {
-    const val = vars[envKey]
-    if (!val) return null
-    data[inviteKey] = val
-  }
-
-  return data as InviteData
 }
 
 export async function invite(): Promise<void> {
   p.intro(pc.bgCyan(pc.black(" Agent Valley Invite ")))
 
-  const data = extractInviteFromEnv()
+  const data = extractInviteFromConfig()
   if (!data) {
     p.log.error("Setup required. Run `bun av setup` first.")
     process.exit(1)

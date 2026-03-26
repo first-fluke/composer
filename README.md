@@ -43,9 +43,8 @@ bun install
 # Interactive setup wizard
 bun av setup
 
-# Or manual configuration
-cp .env.example .env
-# Fill in Linear API keys, workflow state UUIDs, and WORKSPACE_ROOT
+# Or copy template and fill in manually
+cp valley.example.yaml valley.yaml
 
 # Start (dashboard + orchestrator + ngrok tunnel)
 bun av dev
@@ -85,109 +84,87 @@ bun av issue "refactor auth" --breakdown           # Auto-decompose into sub-tas
 
 ## Configuration
 
-### Required (.env)
+### Config Files
 
-| Variable | Description |
-|---|---|
-| `LINEAR_API_KEY` | Linear Personal API key (Settings → API) |
-| `LINEAR_TEAM_ID` | Team identifier (e.g. `ACR`) |
-| `LINEAR_TEAM_UUID` | Team UUID (for GraphQL queries) |
-| `LINEAR_WEBHOOK_SECRET` | Webhook signing secret |
-| `LINEAR_WORKFLOW_STATE_TODO` | "Todo" state UUID |
-| `LINEAR_WORKFLOW_STATE_IN_PROGRESS` | "In Progress" state UUID |
-| `LINEAR_WORKFLOW_STATE_DONE` | "Done" state UUID |
-| `LINEAR_WORKFLOW_STATE_CANCELLED` | "Cancelled" state UUID |
-| `WORKSPACE_ROOT` | Absolute path to the target git repo |
+Two YAML config files, merged at startup (project wins over global):
 
-**How to find Linear UUIDs:**
-
-```bash
-# List teams
-curl -s -X POST https://api.linear.app/graphql \
-  -H "Content-Type: application/json" \
-  -H "Authorization: YOUR_LINEAR_API_KEY" \
-  -d '{"query":"{ teams { nodes { id key name } } }"}' | jq .
-
-# List workflow states
-curl -s -X POST https://api.linear.app/graphql \
-  -H "Content-Type: application/json" \
-  -H "Authorization: YOUR_LINEAR_API_KEY" \
-  -d '{"query":"{ workflowStates { nodes { id name type } } }"}' | jq .
-```
-
-### Optional
-
-| Variable | Default | Description |
+| File | Scope | Description |
 |---|---|---|
-| `AGENT_TYPE` | `claude` | Default agent: `claude` / `codex` / `gemini` |
-| `MAX_PARALLEL` | auto | Max concurrent agents (auto-detected from CPU) |
-| `DELIVERY_MODE` | `merge` | `merge` (auto merge+push) or `pr` (create draft PR) |
-| `SERVER_PORT` | `9741` | Dashboard HTTP port |
-| `LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
-| `LOG_FORMAT` | `json` | `json` / `text` |
+| `~/.config/agent-valley/settings.yaml` | Global (user) | API key, agent defaults, team dashboard |
+| `valley.yaml` | Project | Team config, workspace root, prompt template, routing |
 
-### Multi-Repo Routing (optional)
+Run `av setup` to create both files interactively. See `valley.example.yaml` for format reference.
 
-Route issues to different repos based on Linear labels. First matching label wins, falls back to `WORKSPACE_ROOT`:
-
-```bash
-ROUTING_RULES='[{"label":"backend","workspaceRoot":"/path/to/backend"},{"label":"frontend","workspaceRoot":"/path/to/frontend","agentType":"codex","deliveryMode":"pr"}]'
-```
-
-### Score-Based Routing (optional)
-
-Auto-score issue difficulty and route to different agents:
-
-```bash
-SCORING_MODEL=haiku
-SCORE_ROUTING='{"easy":{"min":1,"max":3,"agent":"gemini"},"medium":{"min":4,"max":7,"agent":"codex"},"hard":{"min":8,"max":10,"agent":"claude"}}'
-```
-
-### Team Dashboard (optional)
-
-Multi-node dashboard via Supabase real-time:
-
-```bash
-SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-TEAM_ID=my-team
-DISPLAY_NAME=my-node
-```
-
----
-
-## WORKFLOW.md
-
-The prompt template sent to agents. YAML front matter defines config (documentation-only), the body is the prompt with template variables:
+### Global Config (`~/.config/agent-valley/settings.yaml`)
 
 ```yaml
----
-tracker:
-  type: linear
-workspace:
-  root: $WORKSPACE_ROOT
+linear:
+  api_key: lin_api_xxx
+
 agent:
-  type: $AGENT_TYPE
-  timeout_seconds: 3600
----
+  type: claude          # Default agent: claude / codex / gemini
+  timeout: 3600
+  max_retries: 3
 
-You are a software engineer working on issue {{issue.identifier}}: {{issue.title}}
+logging:
+  level: info           # debug / info / warn / error
+  format: json          # json / text
 
-## Issue Details
-{{issue.description}}
+server:
+  port: 9741
 
-## Workspace
-- Path: {{workspace_path}}
-- Attempt: {{attempt.id}} (retry count: {{retry_count}})
-
-## Instructions
-1. Read AGENTS.md for project conventions
-2. Implement the changes described in the issue
-3. Write tests
-4. Commit your changes with a clear message
+# Team Dashboard (optional)
+team:
+  supabase_url: https://xxx.supabase.co
+  supabase_anon_key: your-anon-key
+  id: my-team
+  display_name: my-node
 ```
 
-**Template variables:** `{{issue.identifier}}`, `{{issue.title}}`, `{{issue.description}}`, `{{workspace_path}}`, `{{attempt.id}}`, `{{retry_count}}`, `$VAR` (env substitution)
+### Project Config (`valley.yaml`)
+
+```yaml
+linear:
+  team_id: ACR
+  team_uuid: uuid-xxx
+  webhook_secret: whsec_xxx
+  workflow_states:
+    todo: state-uuid
+    in_progress: state-uuid
+    done: state-uuid
+    cancelled: state-uuid
+
+workspace:
+  root: /absolute/path/to/target-repo
+
+delivery:
+  mode: merge           # merge (auto merge+push) or pr (create draft PR)
+
+prompt: |
+  You are working on {{issue.identifier}}: {{issue.title}}.
+  {{issue.description}}
+  Path: {{workspace_path}}
+
+# Multi-Repo Routing (optional)
+routing:
+  rules:
+    - label: "backend"
+      workspace_root: /path/to/backend
+    - label: "frontend"
+      workspace_root: /path/to/frontend
+      agent_type: codex
+      delivery_mode: pr
+
+# Score-Based Routing (optional)
+scoring:
+  model: haiku
+  routes:
+    easy:  { min: 1, max: 3, agent: gemini }
+    medium: { min: 4, max: 7, agent: codex }
+    hard:  { min: 8, max: 10, agent: claude }
+```
+
+**Prompt template variables:** `{{issue.identifier}}`, `{{issue.title}}`, `{{issue.description}}`, `{{workspace_path}}`, `{{attempt.id}}`, `{{retry_count}}`
 
 ---
 
@@ -203,7 +180,7 @@ agent-valley/
 ├── packages/
 │   └── core/                 @agent-valley/core — Orchestration engine
 │       └── src/
-│           ├── config/         Zod config validation + WORKFLOW.md parser
+│           ├── config/         YAML config loader (settings.yaml + valley.yaml)
 │           ├── domain/         Pure types: Issue, Workspace, RunAttempt, DAG
 │           ├── orchestrator/   State machine, agent runner, retry queue, DAG scheduler
 │           ├── sessions/       Agent plugins: Claude, Codex, Gemini
@@ -223,8 +200,7 @@ agent-valley/
 │       └── gc.sh             Worktree garbage collector
 ├── AGENTS.md                 Agent instructions (shared entry point)
 ├── CLAUDE.md                 Claude Code project instructions
-├── WORKFLOW.md               Agent prompt template
-└── .env.example              Environment variable reference
+└── valley.example.yaml       Project config template
 ```
 
 ### Clean Architecture Layers
@@ -245,8 +221,8 @@ Dependency arrows point **downward only**. See `docs/architecture/LAYERS.md`.
 
 | # | Component | Responsibility | Spec |
 |---|---|---|---|
-| 1 | **Workflow Loader** | Parse `WORKFLOW.md` — YAML front matter + prompt body | `docs/specs/workflow-loader.md` |
-| 2 | **Config Layer** | Typed config (Zod) + `$VAR` env resolution | `docs/specs/config-layer.md` |
+| 1 | **Workflow Loader** | Prompt template rendering + input sanitization | `docs/specs/workflow-loader.md` |
+| 2 | **Config Layer** | YAML config loader (settings.yaml + valley.yaml) + Zod validation | `docs/specs/config-layer.md` |
 | 3 | **Tracker Client** | Linear GraphQL — fetch issues, state transitions, comments, HMAC verification | `docs/specs/tracker-client.md` |
 | 4 | **Orchestrator** | Webhook event handler, state machine, retry queue, DAG scheduler | `docs/specs/orchestrator.md` |
 | 5 | **Workspace Manager** | Per-issue git worktree creation, merge/PR, cleanup | `docs/specs/workspace-manager.md` |
@@ -339,9 +315,9 @@ curl -fsSL https://raw.githubusercontent.com/first-fluke/agent-valley/main/scrip
 ## Security
 
 - **HMAC-SHA256** webhook signature verification on all incoming Linear events
-- **Prompt injection defense** — `WORKFLOW.md` is trusted, issue body is always sanitized at entry point
+- **Prompt injection defense** — prompt template in `valley.yaml` is trusted, issue body is always sanitized at entry point
 - **Least privilege** — agents operate only within their assigned worktree
-- **Secret management** — all secrets in `.env` only (gitignored), pre-commit secret detection
+- **Secret management** — secrets in `valley.yaml` and `settings.yaml` (gitignored), pre-commit secret detection
 - **Fetch timeout** — 30s timeout on all Linear API calls
 - **Audit logging** — all agent actions logged in structured JSON
 
@@ -355,7 +331,7 @@ Full documentation: `docs/harness/SAFETY.md`
 |---|---|---|
 | 1 | No framework imports in Domain layer | Domain stays pure and testable |
 | 2 | No business logic in routers | Presentation delegates to Application |
-| 3 | No hardcoded secrets | `.env` only |
+| 3 | No hardcoded secrets | Config YAML only (gitignored) |
 | 4 | Issue body is untrusted | Sanitize at boundary |
 | 5 | Max 500 lines per file | Readability |
 | 6 | No shared mutable state outside Orchestrator | Single state authority |

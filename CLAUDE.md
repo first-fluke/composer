@@ -53,7 +53,7 @@ Domain         src/domain/          Pure types: Issue, Workspace, RunAttempt, Or
 Infrastructure src/tracker/         Linear GraphQL client + webhook HMAC + state mutations + comments
                src/workspace/       Git worktree lifecycle
                src/sessions/        AgentSession implementations (Claude, Codex, Gemini)
-               src/config/          Zod-based config validation + WORKFLOW.md parser
+               src/config/          Zod-based YAML config validation (settings.yaml + valley.yaml)
                src/observability/   Structured JSON/text logger
 ```
 
@@ -71,10 +71,14 @@ Infrastructure src/tracker/         Linear GraphQL client + webhook HMAC + state
 
 `SessionFactory` uses a registry pattern for runtime lookup by agent type string.
 
-## Config & Workflow
+## Config
 
-- **Config:** Zod schema in `src/config/config.ts` validates all env vars at startup. Fails fast with actionable error messages including the variable name and where to fix it.
-- **WORKFLOW.md:** YAML front matter (`---` delimited) defines tracker/workspace/agent/server config. Prompt template body follows, with `{{issue.identifier}}`, `{{issue.title}}`, `{{issue.description}}`, `{{workspace_path}}` template variables. Supports `$VAR` env var substitution.
+Two YAML config files, merged at startup (project wins over global):
+
+- **Global:** `~/.config/agent-valley/settings.yaml` — user credentials (LINEAR_API_KEY), agent defaults, team dashboard settings
+- **Project:** `valley.yaml` — team config, workspace root, workflow states, prompt template, routing rules
+
+Zod schema in `src/config/yaml-loader.ts` validates the merged config. Fails fast with actionable error messages. Prompt template in `valley.yaml` supports `{{issue.identifier}}`, `{{issue.title}}`, `{{issue.description}}`, `{{workspace_path}}` variables.
 
 ## Event Flow
 

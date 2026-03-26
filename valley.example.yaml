@@ -1,0 +1,73 @@
+# valley.yaml — Agent Valley project configuration
+#
+# This file defines project-specific settings for the Symphony orchestrator.
+# User-scoped settings (API key, defaults) go in ~/.config/agent-valley/settings.yaml
+#
+# Run `av setup` to generate both files interactively.
+
+# ── Linear Issue Tracker ──────────────────────────────────────────────
+linear:
+  # team_id: ACR                    # Linear team short code
+  # team_uuid: uuid-xxx             # Linear team UUID
+  # webhook_secret: whsec_xxx       # Linear webhook signing secret
+  workflow_states:
+    # todo: state-uuid              # "Todo" workflow state ID
+    # in_progress: state-uuid       # "In Progress" workflow state ID
+    # done: state-uuid              # "Done" workflow state ID
+    # cancelled: state-uuid         # "Cancelled" workflow state ID
+
+# ── Workspace ─────────────────────────────────────────────────────────
+workspace:
+  # root: /absolute/path/to/workspaces  # Where agents create git worktrees
+
+# ── Agent ─────────────────────────────────────────────────────────────
+# agent:
+#   type: claude                    # claude | codex | gemini (overrides global default)
+
+# ── Delivery ──────────────────────────────────────────────────────────
+delivery:
+  mode: merge                       # merge (auto merge+push) | pr (create PR for review)
+
+# ── Prompt Template ───────────────────────────────────────────────────
+# Template variables: {{issue.identifier}}, {{issue.title}}, {{issue.description}},
+# {{workspace_path}}, {{attempt.id}}, {{retry_count}}, {{retry_reason}}
+prompt: |
+  You are working on {{issue.identifier}}: {{issue.title}}.
+
+  ## Description
+  {{issue.description}}
+
+  ## Workspace
+  Path: {{workspace_path}}
+
+  ## Instructions
+  1. Read AGENTS.md first
+  2. Implement the requested changes
+  3. Run tests before finishing
+
+# ── Multi-Repo Routing (optional) ────────────────────────────────────
+# routing:
+#   rules:
+#     - label: "scope:backend"
+#       workspace_root: /path/to/backend-repo
+#       agent_type: codex
+#       delivery_mode: pr
+#     - label: "scope:frontend"
+#       workspace_root: /path/to/frontend-repo
+
+# ── Score-Based Routing (optional) ───────────────────────────────────
+# scoring:
+#   model: haiku
+#   routes:
+#     easy:
+#       min: 1
+#       max: 3
+#       agent: gemini
+#     medium:
+#       min: 4
+#       max: 7
+#       agent: codex
+#     hard:
+#       min: 8
+#       max: 10
+#       agent: claude

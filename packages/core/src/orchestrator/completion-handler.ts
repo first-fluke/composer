@@ -3,8 +3,8 @@
  * Safety-net (auto-commit), delivery (merge/pr), and exit assessment.
  */
 
-import type { Config } from "../config/env"
 import type { ResolvedRoute } from "../config/routing"
+import type { Config } from "../config/yaml-loader"
 import type { Issue, RunAttempt, Workspace } from "../domain/models"
 import { logger } from "../observability/logger"
 import { addIssueComment, updateIssueState } from "../tracker/linear-client"

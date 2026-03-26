@@ -1,6 +1,10 @@
 /**
- * Interactive setup wizard — guides users through .env configuration
+ * Interactive setup wizard — guides users through YAML configuration
  * using the Linear API to auto-discover teams and workflow states.
+ *
+ * Outputs:
+ *   - ~/.config/agent-valley/settings.yaml (global — API key, agent defaults)
+ *   - valley.yaml (project — team, workspace, prompt, routing)
  *
  * Features:
  *   - Step-based loop with back navigation
@@ -11,10 +15,19 @@
  *   - Partial reconfiguration (--edit mode)
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { detectHardware } from "@agent-valley/core/config/hardware"
+import {
+  type GlobalConfig,
+  loadGlobalConfig,
+  loadProjectConfig,
+  type ProjectConfig,
+  resolveGlobalConfigDir,
+  resolveGlobalConfigPath,
+} from "@agent-valley/core/config/yaml-loader"
 import * as p from "@clack/prompts"
 import pc from "picocolors"
+import { stringify as yamlStringify } from "yaml"
 import type { InviteData } from "./invite"
 import { detectInviteFromClipboard } from "./invite"
 
@@ -30,20 +43,6 @@ export interface WorkflowState {
   id: string
   name: string
   type: string
-}
-
-export interface EnvConfig {
-  apiKey: string
-  teamKey: string
-  teamUuid: string
-  webhookSecret: string
-  todoStateId: string
-  inProgressStateId: string
-  doneStateId: string
-  cancelledStateId: string
-  workspaceRoot: string
-  agentType: string
-  maxParallel: number
 }
 
 // ── Step loop constants ──────────────────────────────────────────────────────
@@ -74,66 +73,63 @@ export function findWorkflowState(states: WorkflowState[], names: string[], type
   return states.find((st) => names.includes(st.name)) ?? states.find((st) => st.type === type)
 }
 
-export function buildEnvContent(config: EnvConfig): string {
-  return [
-    "# ── Linear Issue Tracker ──────────────────────────────────",
-    `LINEAR_API_KEY=${config.apiKey}`,
-    `LINEAR_TEAM_ID=${config.teamKey}`,
-    `LINEAR_TEAM_UUID=${config.teamUuid}`,
-    `LINEAR_WEBHOOK_SECRET=${config.webhookSecret}`,
-    `LINEAR_WORKFLOW_STATE_TODO=${config.todoStateId}`,
-    `LINEAR_WORKFLOW_STATE_IN_PROGRESS=${config.inProgressStateId}`,
-    `LINEAR_WORKFLOW_STATE_DONE=${config.doneStateId}`,
-    `LINEAR_WORKFLOW_STATE_CANCELLED=${config.cancelledStateId}`,
-    "",
-    "# ── Symphony Orchestrator ─────────────────────────────────",
-    `WORKSPACE_ROOT=${config.workspaceRoot}`,
-    "LOG_LEVEL=info",
-    "",
-    "# ── Agent Selection ──────────────────────────────────────",
-    `AGENT_TYPE=${config.agentType}`,
-    `MAX_PARALLEL=${config.maxParallel}`,
-    "SERVER_PORT=9741",
-    "",
-    "# ── Observability (optional) ─────────────────────────────",
-    "LOG_FORMAT=json",
-    "",
-  ].join("\n")
+export function buildGlobalYaml(config: { apiKey: string; agentType: string; maxParallel: number }): string {
+  const obj: GlobalConfig = {
+    linear: { api_key: config.apiKey },
+    agent: { type: config.agentType as "claude" | "codex" | "gemini" },
+    logging: { level: "info", format: "json" },
+    server: { port: 9741 },
+  }
+  return yamlStringify(obj, { lineWidth: 0 })
+}
+
+const DEFAULT_PROMPT = `You are working on {{issue.identifier}}: {{issue.title}}.
+
+## Description
+{{issue.description}}
+
+## Workspace
+Path: {{workspace_path}}
+
+## Instructions
+1. Read AGENTS.md first
+2. Implement the requested changes
+3. Run tests before finishing
+`
+
+export function buildProjectYaml(config: {
+  teamKey: string
+  teamUuid: string
+  webhookSecret: string
+  todoStateId: string
+  inProgressStateId: string
+  doneStateId: string
+  cancelledStateId: string
+  workspaceRoot: string
+  prompt?: string
+}): string {
+  const obj: ProjectConfig = {
+    linear: {
+      team_id: config.teamKey,
+      team_uuid: config.teamUuid,
+      webhook_secret: config.webhookSecret,
+      workflow_states: {
+        todo: config.todoStateId,
+        in_progress: config.inProgressStateId,
+        done: config.doneStateId,
+        cancelled: config.cancelledStateId,
+      },
+    },
+    workspace: { root: config.workspaceRoot },
+    delivery: { mode: "merge" },
+    prompt: config.prompt ?? DEFAULT_PROMPT,
+  }
+  return yamlStringify(obj, { lineWidth: 0 })
 }
 
 export function maskApiKey(key: string): string {
   if (key.length <= 12) return "****"
   return `${key.slice(0, 8)}****${key.slice(-4)}`
-}
-
-export function loadExistingEnv(): Partial<EnvConfig> | null {
-  try {
-    const content = readFileSync(".env", "utf-8")
-    const vars: Record<string, string> = {}
-    for (const line of content.split("\n")) {
-      const trimmed = line.trim()
-      if (!trimmed || trimmed.startsWith("#")) continue
-      const eqIdx = trimmed.indexOf("=")
-      if (eqIdx === -1) continue
-      vars[trimmed.slice(0, eqIdx)] = trimmed.slice(eqIdx + 1)
-    }
-
-    return {
-      apiKey: vars.LINEAR_API_KEY,
-      teamKey: vars.LINEAR_TEAM_ID,
-      teamUuid: vars.LINEAR_TEAM_UUID,
-      webhookSecret: vars.LINEAR_WEBHOOK_SECRET,
-      todoStateId: vars.LINEAR_WORKFLOW_STATE_TODO,
-      inProgressStateId: vars.LINEAR_WORKFLOW_STATE_IN_PROGRESS,
-      doneStateId: vars.LINEAR_WORKFLOW_STATE_DONE,
-      cancelledStateId: vars.LINEAR_WORKFLOW_STATE_CANCELLED,
-      workspaceRoot: vars.WORKSPACE_ROOT,
-      agentType: vars.AGENT_TYPE,
-      maxParallel: vars.MAX_PARALLEL ? Number(vars.MAX_PARALLEL) : undefined,
-    }
-  } catch {
-    return null
-  }
 }
 
 // ── Setup context (accumulated across steps) ─────────────────────────────────
@@ -385,28 +381,40 @@ async function stepParallel(ctx: Partial<SetupContext>, step: number, total: num
 // ── Preview ──────────────────────────────────────────────────────────────────
 
 function renderPreview(ctx: SetupContext): string {
+  const globalPath = resolveGlobalConfigPath()
   const lines = [
-    `LINEAR_API_KEY          = ${pc.dim(maskApiKey(ctx.apiKey))}`,
-    `LINEAR_TEAM_ID          = ${ctx.selectedTeam.key}`,
-    `LINEAR_TEAM_UUID        = ${pc.dim(ctx.teamUuid)}`,
-    `LINEAR_WEBHOOK_SECRET   = ${pc.dim(maskApiKey(ctx.webhookSecret))}`,
-    `WORKFLOW_STATE_TODO     = ${pc.dim(ctx.todoStateId)}`,
-    `WORKFLOW_STATE_IN_PROG  = ${pc.dim(ctx.inProgressStateId)}`,
-    `WORKFLOW_STATE_DONE     = ${pc.dim(ctx.doneStateId)}`,
-    `WORKFLOW_STATE_CANCEL   = ${pc.dim(ctx.cancelledStateId)}`,
-    `WORKSPACE_ROOT          = ${ctx.workspaceRoot}`,
-    `AGENT_TYPE              = ${pc.cyan(ctx.agentType)}`,
-    `MAX_PARALLEL            = ${pc.cyan(String(ctx.maxParallel))}`,
-    `SERVER_PORT             = 9741`,
+    pc.bold("Global") + pc.dim(` (${globalPath})`),
+    `  linear.api_key        = ${pc.dim(maskApiKey(ctx.apiKey))}`,
+    `  agent.type             = ${pc.cyan(ctx.agentType)}`,
+    "",
+    pc.bold("Project") + pc.dim(" (valley.yaml)"),
+    `  linear.team_id         = ${ctx.selectedTeam.key}`,
+    `  linear.team_uuid       = ${pc.dim(ctx.teamUuid)}`,
+    `  linear.webhook_secret  = ${pc.dim(maskApiKey(ctx.webhookSecret))}`,
+    `  workspace.root         = ${ctx.workspaceRoot}`,
+    `  delivery.mode          = merge`,
   ]
   return lines.join("\n")
 }
 
-// ── Save .env ────────────────────────────────────────────────────────────────
+// ── Save YAML files ─────────────────────────────────────────────────────────
 
-async function saveEnv(ctx: SetupContext): Promise<void> {
-  const env = buildEnvContent({
+async function saveConfig(ctx: SetupContext): Promise<void> {
+  // Save global config
+  const globalDir = resolveGlobalConfigDir()
+  if (!existsSync(globalDir)) {
+    mkdirSync(globalDir, { recursive: true })
+  }
+  const globalContent = buildGlobalYaml({
     apiKey: ctx.apiKey,
+    agentType: ctx.agentType,
+    maxParallel: ctx.maxParallel,
+  })
+  writeFileSync(resolveGlobalConfigPath(), globalContent, "utf-8")
+  p.log.success(`Global config saved: ${resolveGlobalConfigPath()}`)
+
+  // Save project config
+  const projectContent = buildProjectYaml({
     teamKey: ctx.selectedTeam.key,
     teamUuid: ctx.teamUuid,
     webhookSecret: ctx.webhookSecret,
@@ -415,12 +423,11 @@ async function saveEnv(ctx: SetupContext): Promise<void> {
     doneStateId: ctx.doneStateId,
     cancelledStateId: ctx.cancelledStateId,
     workspaceRoot: ctx.workspaceRoot,
-    agentType: ctx.agentType,
-    maxParallel: ctx.maxParallel,
   })
+  writeFileSync("valley.yaml", projectContent, "utf-8")
+  p.log.success("Project config saved: valley.yaml")
 
-  writeFileSync(".env", env, "utf-8")
-
+  // Create workspace directory
   if (!existsSync(ctx.workspaceRoot)) {
     mkdirSync(ctx.workspaceRoot, { recursive: true })
     p.log.success(`Workspace directory created: ${ctx.workspaceRoot}`)
@@ -442,7 +449,6 @@ async function fastTrackSetup(invite: InviteData): Promise<void> {
     agentType: invite.agentType,
   }
 
-  // We need the team info for display — try fetching, or use invite data
   const teamKey = invite.teamId
 
   const fastSteps = [
@@ -466,7 +472,6 @@ async function fastTrackSetup(invite: InviteData): Promise<void> {
     i++
   }
 
-  // All values guaranteed by step loop above
   if (!ctx.apiKey || !ctx.workspaceRoot || ctx.maxParallel == null) {
     p.log.error("Missing configuration values. Please try again.")
     process.exit(1)
@@ -489,7 +494,6 @@ async function fastTrackSetup(invite: InviteData): Promise<void> {
     maxParallel: ctx.maxParallel,
   }
 
-  // Final preview
   p.note(renderPreview(fullCtx), "Configuration Review")
   const confirmed = await p.confirm({ message: "Save this configuration?" })
   if (p.isCancel(confirmed) || !confirmed) {
@@ -497,32 +501,33 @@ async function fastTrackSetup(invite: InviteData): Promise<void> {
     process.exit(0)
   }
 
-  await saveEnv(fullCtx)
-  p.outro(pc.green("Setup complete! Start the server with `bun av`."))
+  await saveConfig(fullCtx)
+  p.outro(pc.green("Setup complete! Start the server with `bun av up`."))
 }
 
 // ── Edit mode (partial reconfiguration) ──────────────────────────────────────
 
-const EDITABLE_FIELDS: { value: string; label: string }[] = [
-  { value: "apiKey", label: "Linear API Key" },
-  { value: "webhookSecret", label: "Webhook Secret" },
-  { value: "workspaceRoot", label: "Workspace Path" },
-  { value: "agentType", label: "Agent Type" },
-  { value: "maxParallel", label: "Parallel Agents" },
+const EDITABLE_FIELDS: { value: string; label: string; scope: "global" | "project" }[] = [
+  { value: "apiKey", label: "Linear API Key", scope: "global" },
+  { value: "webhookSecret", label: "Webhook Secret", scope: "project" },
+  { value: "workspaceRoot", label: "Workspace Path", scope: "project" },
+  { value: "agentType", label: "Agent Type", scope: "global" },
 ]
 
 export async function setupEdit(): Promise<void> {
   p.intro(pc.bgCyan(pc.black(" Agent Valley Setup — Edit ")))
 
-  const existing = loadExistingEnv()
-  if (!existing) {
-    p.log.error("No .env file found. Run `bun av setup` first.")
+  const globalConfig = loadGlobalConfig()
+  const projectConfig = loadProjectConfig()
+
+  if (!globalConfig && !projectConfig) {
+    p.log.error("No config files found. Run `bun av setup` first.")
     process.exit(1)
   }
 
   const fields = await p.multiselect({
     message: "Select fields to change",
-    options: EDITABLE_FIELDS,
+    options: EDITABLE_FIELDS.map((f) => ({ value: f.value, label: `${f.label} ${pc.dim(`(${f.scope})`)}` })),
     required: true,
   })
   if (p.isCancel(fields)) {
@@ -531,12 +536,18 @@ export async function setupEdit(): Promise<void> {
   }
 
   const selectedFields = fields as string[]
+  let globalChanged = false
+  let projectChanged = false
+
+  // Work with mutable copies
+  const gConfig = globalConfig ?? {}
+  const pConfig = projectConfig ?? {}
 
   if (selectedFields.includes("apiKey")) {
     const apiKey = await p.text({
       message: "Linear API Key",
       placeholder: "lin_api_xxx",
-      initialValue: existing.apiKey,
+      initialValue: gConfig.linear?.api_key,
       validate: (v) => {
         if (!v) return "Required"
         if (!v.startsWith("lin_api_")) return "Must start with lin_api_"
@@ -546,14 +557,16 @@ export async function setupEdit(): Promise<void> {
       p.cancel("Cancelled")
       process.exit(0)
     }
-    existing.apiKey = apiKey
+    if (!gConfig.linear) gConfig.linear = {}
+    gConfig.linear.api_key = apiKey
+    globalChanged = true
   }
 
   if (selectedFields.includes("webhookSecret")) {
     const secret = await p.text({
       message: "Webhook Signing Secret",
       placeholder: "lin_wh_xxx",
-      initialValue: existing.webhookSecret,
+      initialValue: pConfig.linear?.webhook_secret,
       validate: (v) => {
         if (!v) return "Required"
       },
@@ -562,13 +575,15 @@ export async function setupEdit(): Promise<void> {
       p.cancel("Cancelled")
       process.exit(0)
     }
-    existing.webhookSecret = secret
+    if (!pConfig.linear) pConfig.linear = {}
+    pConfig.linear.webhook_secret = secret
+    projectChanged = true
   }
 
   if (selectedFields.includes("workspaceRoot")) {
     const root = await p.text({
       message: "Agent workspace path (absolute)",
-      initialValue: existing.workspaceRoot,
+      initialValue: pConfig.workspace?.root,
       validate: (v) => {
         if (!v) return "Required"
         if (!v.startsWith("/")) return "Must be an absolute path"
@@ -578,7 +593,9 @@ export async function setupEdit(): Promise<void> {
       p.cancel("Cancelled")
       process.exit(0)
     }
-    existing.workspaceRoot = root
+    if (!pConfig.workspace) pConfig.workspace = {}
+    pConfig.workspace.root = root
+    projectChanged = true
   }
 
   if (selectedFields.includes("agentType")) {
@@ -594,83 +611,27 @@ export async function setupEdit(): Promise<void> {
       p.cancel("Cancelled")
       process.exit(0)
     }
-    existing.agentType = agent
+    if (!gConfig.agent) gConfig.agent = {}
+    gConfig.agent.type = agent as "claude" | "codex" | "gemini"
+    globalChanged = true
   }
 
-  if (selectedFields.includes("maxParallel")) {
-    const hw = detectHardware()
-    p.note(
-      [
-        `CPU: ${pc.cyan(String(hw.cpuCores))} cores`,
-        `RAM: ${pc.cyan(String(hw.totalMemoryGB))} GB`,
-        `Recommended: ${pc.green(String(hw.recommended))}`,
-      ].join("\n"),
-      "Hardware Detection",
-    )
-    const val = await p.text({
-      message: "Number of parallel agents",
-      initialValue: String(existing.maxParallel ?? hw.recommended),
-      validate: (v) => {
-        const n = Number(v)
-        if (!Number.isInteger(n) || n < 1) return "Must be a positive integer"
-      },
-    })
-    if (p.isCancel(val)) {
-      p.cancel("Cancelled")
-      process.exit(0)
-    }
-    existing.maxParallel = Number(val)
-  }
-
-  // Validate we have all required fields
-  const required: (keyof EnvConfig)[] = [
-    "apiKey",
-    "teamKey",
-    "teamUuid",
-    "webhookSecret",
-    "todoStateId",
-    "inProgressStateId",
-    "doneStateId",
-    "cancelledStateId",
-    "workspaceRoot",
-    "agentType",
-    "maxParallel",
-  ]
-  for (const key of required) {
-    if (!existing[key]) {
-      p.log.error(`Missing value for ${key}. Run full setup again: bun av setup`)
-      process.exit(1)
-    }
-  }
-
-  const env = buildEnvContent(existing as EnvConfig)
-
-  p.note(
-    env
-      .split("\n")
-      .filter((l) => l && !l.startsWith("#"))
-      .map((l) => {
-        if (l.includes("API_KEY=") || l.includes("SECRET=")) {
-          const [key, val] = l.split("=")
-          return `${key}=${pc.dim(maskApiKey(val ?? ""))}`
-        }
-        return l
-      })
-      .join("\n"),
-    "Updated Configuration",
-  )
-
-  const confirmed = await p.confirm({ message: "Save this configuration?" })
+  const confirmed = await p.confirm({ message: "Save changes?" })
   if (p.isCancel(confirmed) || !confirmed) {
     p.cancel("Cancelled")
     process.exit(0)
   }
 
-  writeFileSync(".env", env, "utf-8")
+  if (globalChanged) {
+    const globalDir = resolveGlobalConfigDir()
+    if (!existsSync(globalDir)) mkdirSync(globalDir, { recursive: true })
+    writeFileSync(resolveGlobalConfigPath(), yamlStringify(gConfig, { lineWidth: 0 }), "utf-8")
+    p.log.success(`Global config updated: ${resolveGlobalConfigPath()}`)
+  }
 
-  if (existing.workspaceRoot && !existsSync(existing.workspaceRoot)) {
-    mkdirSync(existing.workspaceRoot, { recursive: true })
-    p.log.success(`Workspace directory created: ${existing.workspaceRoot}`)
+  if (projectChanged) {
+    writeFileSync("valley.yaml", yamlStringify(pConfig, { lineWidth: 0 }), "utf-8")
+    p.log.success("Project config updated: valley.yaml")
   }
 
   p.outro(pc.green("Configuration updated!"))
@@ -681,13 +642,18 @@ export async function setupEdit(): Promise<void> {
 export async function setup(): Promise<void> {
   p.intro(pc.bgCyan(pc.black(" Agent Valley Setup ")))
 
-  // ── Check existing .env ────────────────────────────────────────────────────
-  if (existsSync(".env")) {
-    const overwrite = await p.confirm({ message: ".env file already exists. Overwrite?" })
+  // ── Check existing config ────────────────────────────────────────────────
+  const hasGlobal = existsSync(resolveGlobalConfigPath())
+  const hasProject = existsSync("valley.yaml")
+
+  if (hasGlobal && hasProject) {
+    const overwrite = await p.confirm({ message: "Config files already exist. Overwrite?" })
     if (p.isCancel(overwrite) || !overwrite) {
       p.cancel("Cancelled")
       process.exit(0)
     }
+  } else if (hasGlobal) {
+    p.log.info(pc.dim("Global config found. Only project setup needed."))
   }
 
   // ── Detect invite in clipboard ─────────────────────────────────────────────
@@ -699,9 +665,21 @@ export async function setup(): Promise<void> {
     }
   }
 
-  // ── Full step-based setup ──────────────────────────────────────────────────
+  // ── Pre-populate from existing global config ─────────────────────────────
   const ctx: Partial<SetupContext> = {}
+  if (hasGlobal) {
+    try {
+      const existing = loadGlobalConfig()
+      if (existing) {
+        ctx.apiKey = existing.linear?.api_key
+        ctx.agentType = existing.agent?.type
+      }
+    } catch {
+      // Ignore — will be overwritten
+    }
+  }
 
+  // ── Full step-based setup ──────────────────────────────────────────────────
   type StepFn = (ctx: Partial<SetupContext>, step: number, total: number) => Promise<StepResult>
 
   const steps: StepFn[] = [
@@ -740,6 +718,6 @@ export async function setup(): Promise<void> {
     process.exit(0)
   }
 
-  await saveEnv(fullCtx)
-  p.outro(pc.green("Setup complete! Start the server with `bun av`."))
+  await saveConfig(fullCtx)
+  p.outro(pc.green("Setup complete! Start the server with `bun av up`."))
 }

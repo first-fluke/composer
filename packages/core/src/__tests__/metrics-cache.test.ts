@@ -6,7 +6,7 @@
  * SSE poll interval.
  */
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
-import type { Config } from "../config/env"
+import type { Config } from "../config/yaml-loader"
 import type { OrchestratorRuntimeState } from "../domain/models"
 import type { AgentRunnerService } from "../orchestrator/agent-runner"
 import { _resetMetricsCache, buildOrchestratorStatus } from "../orchestrator/helpers"
@@ -37,6 +37,7 @@ function makeConfig(): Config {
     agentType: "claude",
     maxParallel: 3,
     serverPort: 9741,
+    promptTemplate: "test prompt",
   } as Config
 }
 

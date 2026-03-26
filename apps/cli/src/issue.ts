@@ -129,14 +129,17 @@ export async function createIssue(
 ): Promise<void> {
   const autoConfirm = options?.yes ?? false
   const noExpand = options?.raw ?? false
-  const apiKey = process.env.LINEAR_API_KEY
-  const teamUuid = process.env.LINEAR_TEAM_UUID
-  const todoStateId = process.env.LINEAR_WORKFLOW_STATE_TODO
-
-  if (!apiKey || !teamUuid || !todoStateId) {
+  const { loadConfig } = await import("@agent-valley/core/config/yaml-loader")
+  let config: ReturnType<typeof loadConfig>
+  try {
+    config = loadConfig()
+  } catch {
     console.log(pc.red("Setup required. Run `bun av setup` first."))
     process.exit(1)
   }
+  const apiKey = config.linearApiKey
+  const teamUuid = config.linearTeamUuid
+  const todoStateId = config.workflowStates.todo
 
   // --breakdown mode: delegate to breakdown handler
   if (options?.breakdown) {

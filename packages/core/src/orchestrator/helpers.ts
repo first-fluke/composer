@@ -4,7 +4,7 @@
 
 import { execSync } from "node:child_process"
 import { cpus, freemem, platform, totalmem } from "node:os"
-import type { Config } from "../config/env"
+import type { Config } from "../config/yaml-loader"
 import type { DagNode, Issue, OrchestratorRuntimeState, RunAttempt } from "../domain/models"
 import type { AgentRunnerService } from "./agent-runner"
 import type { RetryQueue } from "./retry-queue"

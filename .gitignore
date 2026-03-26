@@ -2,6 +2,7 @@
 .env
 .env.local
 .env.*.local
+valley.yaml
 
 # Dependencies
 node_modules/

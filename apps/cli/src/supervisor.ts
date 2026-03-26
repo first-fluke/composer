@@ -41,18 +41,17 @@ function startDashboard(): void {
   // Ensure previous process is dead before starting a new one
   killCurrentProc()
 
-  const envFile = resolve(dashboardCwd, "../../.env")
   let proc: ReturnType<typeof spawn>
 
   if (mode === "start") {
-    proc = spawn("bun", [`--env-file=${envFile}`, "next", "start", "-p", port], {
+    proc = spawn("bun", ["next", "start", "-p", port], {
       cwd: dashboardCwd,
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env, PORT: port, HOSTNAME: "0.0.0.0" },
     })
     log(`Dashboard started via next start (pid: ${proc.pid}, port: ${port})`)
   } else {
-    proc = spawn("bun", [`--env-file=${envFile}`, "next", "dev", "--turbopack", "-p", port], {
+    proc = spawn("bun", ["next", "dev", "--turbopack", "-p", port], {
       cwd: dashboardCwd,
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env, PORT: port, HOSTNAME: "0.0.0.0" },

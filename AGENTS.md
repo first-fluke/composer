@@ -31,25 +31,16 @@ The install script auto-detects project state and branches into new/existing mod
 ./scripts/dev.sh
 ```
 
-**Required environment variables** (see `.env.example`, values go in `.env` only):
+**Configuration files:**
 
-| Variable | Description |
-|---|---|
-| `LINEAR_API_KEY` | Linear Personal API key |
-| `LINEAR_TEAM_ID` | Linear team identifier (e.g. `ACR`) |
-| `LINEAR_TEAM_UUID` | Linear team UUID |
-| `LINEAR_WEBHOOK_SECRET` | Linear webhook signing secret |
-| `LINEAR_WORKFLOW_STATE_TODO` | "Todo" state ID |
-| `LINEAR_WORKFLOW_STATE_IN_PROGRESS` | "In Progress" state ID |
-| `LINEAR_WORKFLOW_STATE_DONE` | "Done" state ID |
-| `LINEAR_WORKFLOW_STATE_CANCELLED` | "Cancelled" state ID |
-| `WORKSPACE_ROOT` | Workspace root absolute path |
-| `AGENT_TYPE` | Agent to use: `claude` \| `gemini` \| `codex` |
-| `LOG_LEVEL` | Log level (`info` recommended) |
+| File | Scope | Description |
+|---|---|---|
+| `~/.config/agent-valley/settings.yaml` | Global (user) | API key, agent defaults, team dashboard |
+| `valley.yaml` | Project | Team config, workspace root, workflow states, prompt, routing |
 
-**Config file:** `.env` (copy from `.env.example`)
+Run `av setup` to create both files interactively. See `valley.example.yaml` for format reference.
 
-> On missing env vars, error messages must include the missing variable name and where to set it.
+> On missing config, error messages must include the missing key path and which file to set it in.
 
 ---
 
@@ -59,8 +50,8 @@ Symphony SPEC — 7 components:
 
 | # | Component | Responsibility |
 |---|---|---|
-| 1 | **Workflow Loader** | Parse `WORKFLOW.md` — YAML front matter + prompt body |
-| 2 | **Config Layer** | Typed config + `$VAR` env var resolution |
+| 1 | **Workflow Loader** | Prompt template rendering + input sanitization |
+| 2 | **Config Layer** | YAML config loader (settings.yaml + valley.yaml) + Zod validation |
 | 3 | **Issue Tracker Client** | Linear webhook parsing + signature verification + startup sync |
 | 4 | **Orchestrator** | Webhook event handler, state machine, retry queue, sole in-memory state authority |
 | 5 | **Workspace Manager** | Per-issue isolated directory + git worktree lifecycle |
@@ -80,7 +71,7 @@ Symphony SPEC — 7 components:
 - **Least privilege:** Grant agents only the minimum permissions needed for the task.
 - **Prompt injection defense:** `WORKFLOW.md` is trusted. Issue body is always suspect — validate at the entry point.
 - **Network egress control:** Agents must not make direct external network calls. All external calls go through approved adapters.
-- **Secret management:** Never include API keys or tokens in code, logs, or commits. `.env` is registered in `.gitignore`.
+- **Secret management:** Never include API keys or tokens in code, logs, or commits. `valley.yaml` and `settings.yaml` are registered in `.gitignore`.
 - **Audit logging:** Record all agent actions as structured logs.
 
 **Details:** `docs/harness/SAFETY.md`

@@ -4,7 +4,7 @@
  */
 
 import type { Issue } from "../domain/models"
-import type { Config, ScoreRoutingConfig } from "./env"
+import type { Config, ScoreRoutingConfig } from "./yaml-loader"
 
 export interface ResolvedRoute {
   workspaceRoot: string
