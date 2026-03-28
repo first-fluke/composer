@@ -286,11 +286,12 @@ program
   .option("--raw", "Skip Claude CLI expansion, use input as-is")
   .option("--parent <identifier>", "Create as sub-issue of the given parent (e.g. ACR-10)")
   .option("--blocked-by <identifier>", "Mark as blocked by the given issue (e.g. ACR-12)")
+  .option("--scope <name>", "Attach scope label for routing (e.g. place-haejo → scope:place-haejo)")
   .option("--breakdown", "Auto-decompose into sub-issues with dependency DAG")
   .action(
     async (
       description: string | undefined,
-      opts: { yes?: boolean; raw?: boolean; parent?: string; blockedBy?: string; breakdown?: boolean },
+      opts: { yes?: boolean; raw?: boolean; parent?: string; blockedBy?: string; scope?: string; breakdown?: boolean },
     ) => {
       const { createIssue } = await import("./issue")
       await createIssue(description, {
@@ -298,6 +299,7 @@ program
         raw: opts.raw,
         parent: opts.parent,
         blockedBy: opts.blockedBy,
+        scope: opts.scope,
         breakdown: opts.breakdown,
       })
     },

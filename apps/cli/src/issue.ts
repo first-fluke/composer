@@ -125,7 +125,7 @@ async function expandWithClaude(rawInput: string): Promise<IssueInput> {
 
 export async function createIssue(
   input: string | undefined,
-  options?: { yes?: boolean; raw?: boolean; parent?: string; blockedBy?: string; breakdown?: boolean },
+  options?: { yes?: boolean; raw?: boolean; parent?: string; blockedBy?: string; scope?: string; breakdown?: boolean },
 ): Promise<void> {
   const autoConfirm = options?.yes ?? false
   const noExpand = options?.raw ?? false
@@ -222,6 +222,7 @@ export async function createIssue(
 
   // Show preview and confirm
   const scoreDisplay = score !== null ? `\n${pc.cyan(`Complexity: score:${score}`)}` : ""
+  const scopeDisplay = options?.scope ? `\n${pc.blue(`Scope: scope:${options.scope.replace(/^scope:/, "")}`)}` : ""
   const parentDisplay = parentId ? `\n${pc.magenta(`Parent: ${options?.parent}`)}` : ""
   const blockerDisplay = options?.blockedBy ? `\n${pc.yellow(`blocked by: ${options.blockedBy}`)}` : ""
   p.note(
@@ -230,6 +231,7 @@ export async function createIssue(
       "",
       description || pc.dim("(no description)"),
       scoreDisplay,
+      scopeDisplay,
       parentDisplay,
       blockerDisplay,
     ].join("\n"),
@@ -279,6 +281,17 @@ export async function createIssue(
         await addIssueLabel(apiKey, teamId, issue.id, `score:${score}`)
       } catch {
         // Non-critical: label attachment failure doesn't block issue creation
+      }
+    }
+
+    // Attach scope label for routing (best-effort, non-blocking)
+    if (options?.scope && teamUuid) {
+      try {
+        const { addIssueLabel } = await import("@agent-valley/core/tracker/linear-client")
+        const scopeLabel = options.scope.startsWith("scope:") ? options.scope : `scope:${options.scope}`
+        await addIssueLabel(apiKey, teamUuid, issue.id, scopeLabel)
+      } catch {
+        // Non-critical: scope label attachment failure doesn't block issue creation
       }
     }
 
